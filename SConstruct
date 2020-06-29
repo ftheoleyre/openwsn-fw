@@ -14,7 +14,7 @@ banner += ["`___'|  _/\___.|_|_||__/_/ <___/|_\_|"]
 banner += ["     |_|                  openwsn.org"]
 banner += [""]
 banner  = '\n'.join(banner)
-print banner
+print(banner)
 
 #===== help text
 
@@ -378,7 +378,7 @@ else:
             variables = command_line_vars
         )
 
-def default(env,target,source): print SCons.Script.help_text
+def default(env,target,source): print(SCons.Script.help_text)
 Default(env.Command('default', None, default))
 
 #============================ verbose =========================================
@@ -433,7 +433,7 @@ def listFunction(env,target,source):
         for t in v:
             output += ['    - {0}'.format(t)]
     output = '\n'.join(output)
-    print output
+    print(output)
 list = env.Command('list', None, listFunction)
 AlwaysBuild(list)
 Alias('list',list)
@@ -441,7 +441,7 @@ Alias('list',list)
 #===== env
 
 def envFunction(env,target,source):
-    print env.Dump()
+    print(env.Dump())
 envCommand = env.Command('env', None, envFunction)
 AlwaysBuild(envCommand)
 Alias('env',envCommand)
