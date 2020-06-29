@@ -103,9 +103,15 @@ void macpong_send(uint8_t payloadCtr) {
 
 //=========================== stubbing ========================================
 
+//===== FRAG
+
+void iphc_init(void)                                            {return; }
+void iphc_sendDone(OpenQueueEntry_t *msg, owerror_t sendError)  {return; }
+void iphc_receive(OpenQueueEntry_t *msg)                        {return; }
+
 //===== IPHC
 
-void iphc_init(void) {
+void frag_init(void) {
     macpong_vars.timerId = opentimers_create(TIMER_GENERAL_PURPOSE, TASKPRIO_IPHC);
     opentimers_scheduleIn(
         macpong_vars.timerId,   // timerId
@@ -116,12 +122,12 @@ void iphc_init(void) {
     );
 }
 
-void iphc_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
+void frag_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
    msg->owner = COMPONENT_IPHC;
    openqueue_freePacketBuffer(msg);
 }
 
-void iphc_receive(OpenQueueEntry_t* msg) {
+void frag_receive(OpenQueueEntry_t* msg) {
    msg->owner = COMPONENT_IPHC;
    macpong_send(++msg->payload[0]);
    openqueue_freePacketBuffer(msg);
@@ -184,31 +190,14 @@ bool icmpv6rpl_daoSent(void) {
     return TRUE;
 }
 void icmpv6rpl_setMyDAGrank(dagrank_t rank)                          { return; }
-void icmpv6rpl_killPreferredParent(void)                             { return; }
 void icmpv6rpl_updateMyDAGrankAndParentSelection(void)               { return; }
-void icmpv6rpl_indicateRxDIO(OpenQueueEntry_t* msg)                  { return; }
 void icmpv6echo_setIsReplyEnabled(bool isEnabled)                    { return; }
 
 
-
-void opentcp_init(void)                                 { return; }
 void openudp_init(void)                                 { return; }
 void opencoap_init(void)                                { return; }
 
 //===== L7
 
 void openapps_init(void)                                { return; }
-void ohlone_init(void)                                  { return; }
-void tcpecho_init(void)                                 { return; }
-void tcpinject_init(void)                               { return; }
-void tcpinject_trigger(void)                            { return; }
-void tcpprint_init(void)                                { return; }
-void c6t_init(void)                                     { return; }
-void cinfo_init(void)                                   { return; }
-void cleds__init(void)                                  { return; }
-void cwellknown_init(void)                              { return; }
-   // TCP
-void techo_init(void)                                   { return; }
-   // UDP
-void uecho_init(void)                                   { return; }
 

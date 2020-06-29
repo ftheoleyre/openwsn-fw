@@ -10,6 +10,13 @@ from tools import qtcreator as q
 
 Import('env')
 
+# python2/python2.7 are not recognized in windows so use 'python' directly and
+# assume the right version is installed.
+if os.name=='nt':       # Windows
+   PYTHON_PY = 'python '
+elif os.name=='posix':  # Linux
+   PYTHON_PY = 'python2 '
+
 # directory where we put object and linked files
 # WARNING: -c (clean) removes the VARDIR, so it cannot be blank
 env['VARDIR']  = os.path.join('#','build','{0}_{1}'.format(env['board'],env['toolchain']))
@@ -203,7 +210,7 @@ elif env['toolchain']=='iar-proj':
     
 elif env['toolchain']=='armgcc':
     
-    if env['board'] not in ['silabs-ezr32wg','openmote-cc2538','openmote-b','openmote-b-24ghz','openmote-b-subghz','iot-lab_M3','iot-lab_A8-M3','openmotestm', 'samr21_xpro', 'scum']:
+    if env['board'] not in ['silabs-ezr32wg','openmote-cc2538','openmote-b','openmote-b-24ghz','openmote-b-subghz','iot-lab_M3','iot-lab_A8-M3','openmotestm','samr21_xpro','scum','nrf52840']:
         raise SystemError('toolchain {0} can not be used for board {1}'.format(env['toolchain'],env['board']))
     
     if   env['board'] in ['openmote-cc2538','openmote-b','openmote-b-24ghz', 'openmote-b-subghz']:
@@ -398,6 +405,66 @@ elif env['toolchain']=='armgcc':
         env.Replace(NM           = 'arm-none-eabi-nm')
         env.Replace(SIZE         = 'arm-none-eabi-size')
         
+    elif env['board']=='nrf52840':
+
+        # compiler (C)
+        env.Replace(CC           = 'arm-none-eabi-gcc')
+        env.Append(CCFLAGS       = '-O0')
+        env.Append(CCFLAGS       = '-Wall')
+        env.Append(CCFLAGS       = '-Wa,-adhlns=${TARGET.base}.lst')
+        env.Append(CCFLAGS       = '-c')
+        env.Append(CCFLAGS       = '-fmessage-length=0')
+        env.Append(CCFLAGS       = '-mcpu=cortex-m4')
+        env.Append(CCFLAGS       = '-mthumb')
+        env.Append(CCFLAGS       = '-g')
+        env.Append(CCFLAGS       = '-std=gnu99')
+        env.Append(CCFLAGS       = '-Wstrict-prototypes')
+        env.Append(CCFLAGS       = '-ffunction-sections')
+        env.Append(CCFLAGS       = '-fdata-sections')
+        env.Append(CCFLAGS       = '-mfpu=fpv4-sp-d16')
+        env.Append(CCFLAGS       = '-mfloat-abi=hard')
+        env.Append(CCFLAGS       = '-D__FPU_PRESENT=1')
+        env.Append(CCFLAGS       = '-DUSE_APP_CONFIG=1')
+        env.Append(CCFLAGS       = '-DNRF52840_XXAA=1')             # set the CPU to nRF52840 (ARM Cortex M4f)
+        if env['revision'] == "DK":
+            env.Append(CCFLAGS   = '-DBOARD_PCA10056=1')            # set the board to be the nRF52840 Development Kit
+            print "*** nrf52840-DK ***\n"
+        elif env['revision'] == "DONGLE":
+            env.Append(CCFLAGS   = '-DBOARD_PCA10059=1')            # set the board to be the nRF52840 Dongle
+            env.Append(CCFLAGS   = '-DCONFIG_NFCT_PINS_AS_GPIOS=1') # configure NFCT pins as GPIOs
+            print "*** nrf52840-DONGLE ***\n"
+        else:
+            print "*** unknown ***\n"
+
+        env.Append(CCFLAGS       = '-DCONFIG_GPIO_AS_PINRESET=1')   # just to be able to reset the board via the on-board reset pin
+
+        # assembler
+        env.Replace(AS           = 'arm-none-eabi-as')
+        env.Append(ASFLAGS       = '-g -gdwarf-2 -mcpu=cortex-m4 -mthumb -c -x assembler-with-cpp ')
+        env.Append(ASFLAGS       = '-DNRF52840_XXAA=1')
+        
+        # linker
+        env.Append(LINKFLAGS     = '-Lbsp/boards/nrf52840/sdk/modules/nrfx/mdk')
+        env.Append(LINKFLAGS     = '-g -gdwarf-2 -mcpu=cortex-m4 -mthumb')
+
+        # @todo: Decide which linker script to use
+        if env['revision'] == "DK":
+            env.Append(LINKFLAGS     = '-Tbsp/boards/nrf52840/nrf52840_xxaa.ld')
+        elif env['revision'] == "DONGLE":
+            env.Append(LINKFLAGS     = '-Tbsp/boards/nrf52840/nrf52840_xxaa_dongle.ld')
+        # env.Append(LINKFLAGS     = '-Tbsp/boards/nrf52840/sdk/config/nrf52840/armgcc/generic_gcc_nrf52.ld')
+
+        # env.Append(LINKFLAGS     = '--strip-debug')
+
+        env.Append(LINKFLAGS     = '-Xlinker --gc-sections -Xlinker')
+        env.Append(LINKFLAGS     = '-Map=${TARGET.base}.map')
+        
+        env.Append(LINKFLAGS     = '-mfpu=fpv4-sp-d16 -mfloat-abi=hard --specs=nosys.specs')
+
+        #--specs=nano.specs
+        env.Append(LINKFLAGS     = '-Wl,--start-group -lgcc -lc -lg -lm -lnosys -Wl,--end-group')
+        env.Append(LINKFLAGS       = os.path.join('build',env['board']+'_armgcc','bsp','boards',env['board'],'sdk','modules','nrfx','mdk','gcc_startup_nrf52840.o'))
+        
     elif   env['board']=='scum':
         
         # compiler (C)
@@ -432,7 +499,7 @@ elif env['toolchain']=='armgcc':
         # misc
         env.Replace(NM           = 'arm-none-eabi-nm')
         env.Replace(SIZE         = 'arm-none-eabi-size')
-        
+
     else:
         raise SystemError('unexpected board={0}'.format(env['board']))
     
@@ -522,6 +589,15 @@ def jtagUploadFunc(location):
                 suffix      = '.phonyupload',
                 src_suffix  = '.ihex',
             )
+        if env['board']=='nrf52840':
+            if env['revision']=='DK':
+              return Builder(
+                  action      = os.path.join('bsp','boards',env['board'],'tools','flash.sh') + " $SOURCE",
+                  suffix      = '.phonyupload',
+                  src_suffix  = '.elf',
+              )
+            else:
+              raise SystemError('Only nRF52840 DK flashing is supported at the moment.')
     else:
         if env['fet_version']==2:
             # MSP-FET430uif is running v2 Firmware
@@ -603,7 +679,7 @@ class telosb_bootloadThread(threading.Thread):
     def run(self):
         print 'starting bootloading on {0}'.format(self.comPort)
         subprocess.call(
-            'python '+os.path.join('bootloader','telosb','bsl')+' --telosb -c {0} -r -e -I -p "{1}"'.format(self.comPort,self.hexFile),
+            PYTHON_PY +  os.path.join('bootloader','telosb','bsl')+' --telosb -c {0} -r -e -I -p "{1}"'.format(self.comPort,self.hexFile),
             shell=True
         )
         print 'done bootloading on {0}'.format(self.comPort)
@@ -645,7 +721,7 @@ class OpenMoteCC2538_bootloadThread(threading.Thread):
     def run(self):
         print 'starting bootloading on {0}'.format(self.comPort)
         subprocess.call(
-            'python '+os.path.join('bootloader','openmote-cc2538','cc2538-bsl.py')+' -e --bootloader-invert-lines -w -b 400000 -p {0} {1}'.format(self.comPort,self.hexFile),
+            PYTHON_PY +  os.path.join('bootloader','openmote-cc2538','cc2538-bsl.py')+' -e --bootloader-invert-lines -w -b 400000 -p {0} {1}'.format(self.comPort,self.hexFile),
             shell=True
         )
         print 'done bootloading on {0}'.format(self.comPort)
@@ -700,7 +776,7 @@ class opentestbed_bootloadThread(threading.Thread):
         else:
             target  = self.mote
         subprocess.call(
-            'python '+os.path.join('bootloader','openmote-cc2538','ot_program.py')+' -a {0} {1}'.format(target,self.hexFile),
+            PYTHON_PY +  os.path.join('bootloader','openmote-cc2538','ot_program.py')+' -a {0} {1}'.format(target,self.hexFile),
             shell=True
         )
         print 'done bootloading on {0}'.format(self.mote)
@@ -747,7 +823,7 @@ class openmotestm_bootloadThread(threading.Thread):
     def run(self):
         print 'starting bootloading on {0}'.format(self.comPort)
         subprocess.call(
-            'python '+ os.path.join('bootloader','openmotestm','bin.py' + ' -p {0} {1}'.format(self.comPort, self.binaryFile)),
+            PYTHON_PY +  os.path.join('bootloader','openmotestm','bin.py' + ' -p {0} {1}'.format(self.comPort, self.binaryFile)),
             shell=True
         )
         print 'done bootloading on {0}'.format(self.comPort)
@@ -789,7 +865,7 @@ class IotLabM3_bootloadThread(threading.Thread):
     def run(self):
         print 'starting bootloading on {0}'.format(self.comPort)
         subprocess.call(
-            'python '+ os.path.join('bootloader','iot-lab_M3','iotlab-m3-bsl.py' + ' -i {0} -p {1}'.format(self.binaryFile, self.comPort)),
+            PYTHON_PY + os.path.join('bootloader','iot-lab_M3','iotlab-m3-bsl.py' + ' -i {0} -p {1}'.format(self.binaryFile, self.comPort)),
             shell=True
         )
         print 'done bootloading on {0}'.format(self.comPort)
@@ -835,7 +911,7 @@ class scum_bootloadThread(threading.Thread):
     def run(self):
         print 'starting bootloading on {0}'.format(self.comPort)
         subprocess.call(
-            'python '+ os.path.join('bootloader','scum','scum_bootloader.py' + ' -p {0} {1}'.format(self.comPort, self.binaryFile)),
+            PYTHON_PY +  os.path.join('bootloader','scum','scum_bootloader.py' + ' -p {0} {1}'.format(self.comPort, self.binaryFile)),
             shell=True
         )
         print 'done bootloading on {0}'.format(self.comPort)
@@ -917,9 +993,13 @@ def extras(env, source):
     returnVal  = []
     returnVal += [env.PrintSize(source=source)]
     returnVal += [env.Elf2iHex(source=source)]
-    returnVal += [env.Elf2iBin(source=source)]
+    if env['board'] != 'nrf52840':
+        returnVal += [env.Elf2iBin(source=source)]
     if   env['jtag']:
-        returnVal += [env.JtagUpload(env.Elf2iHex(source))]
+        if env['board'] == 'nrf52840' and env['revision'] == 'DK' and env['jtag'] == 'bflash':
+            returnVal += [env.JtagUpload(source)]
+        else:
+            returnVal += [env.JtagUpload(env.Elf2iHex(source))]
     elif env['bootload']:
         returnVal += [env.Bootload(env.Elf2iHex(source))]
     return returnVal
