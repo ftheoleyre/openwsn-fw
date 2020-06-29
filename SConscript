@@ -324,6 +324,7 @@ elif env['toolchain']=='armgcc':
         env.Append(CCFLAGS       = '-mthumb')
         env.Append(CCFLAGS       = '-mthumb-interwork')
         env.Append(CCFLAGS       = '-nostartfiles')
+	env.Append(CCFLAGS       = '-Os')			#reduce the size
         # compiler (C++)
         env.Replace(CXX          = 'arm-none-eabi-g++')
         # assembler
