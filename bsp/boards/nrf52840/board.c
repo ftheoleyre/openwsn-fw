@@ -18,6 +18,7 @@
 
 #include "sdk/components/boards/boards.h"
 
+#include "config.h"
 #include "board.h"
 #include "leds.h"
 // #include "bsp_timer.h"   ///< OBSOLETE, use sctimer instead
@@ -89,7 +90,9 @@ void board_init(void) {
 
     i2c_init();
 
+#if BOARD_SENSORS_ENABLED
     sensors_init();
+#endif
 }
 
 /**
@@ -132,4 +135,3 @@ static void button_init(void)
 }
 
 //=========================== interrupt handlers ==============================
-

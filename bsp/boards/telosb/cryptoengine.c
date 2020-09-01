@@ -4,6 +4,10 @@
 \author Malisa Vucinic <malishav@gmail.com>, April 2015.
 */
 
+#include "config.h"
+
+#if BOARD_CRYPTOENGINE_ENABLED
+
 #include "opendefs.h"
 #include "board.h"
 #include "radio.h"
@@ -358,3 +362,4 @@ static void reverse(uint8_t *start, uint8_t len) {
    }
 }
 
+#endif /* BOARD_CRYPTOENGINE_ENABLED */
