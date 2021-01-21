@@ -147,6 +147,7 @@ typedef enum {
     S_RXDATAPREPARE = 0x10,     // preparing for Rx data
     S_RXDATAREADY = 0x11,       // ready to Rx data, waiting for 'go'
     S_RXDATALISTEN = 0x12,      // idle listening for data
+    S_CCATRIGGERED = 0x20,      // cca triggered, waiting for the result
     S_RXDATA = 0x13,            // data SFD received, receiving more bytes
     S_TXACKOFFSET = 0x14,       // waiting to prepare for Tx ACK
     S_TXACKPREPARE = 0x15,      // preparing for Tx ACK
@@ -176,6 +177,7 @@ enum ieee154e_atomicdurations_enum {
     wdAckDuration             =  (3000/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
 #endif
 
+   CCAOffset                 = (3500/PORT_US_PER_TICK),                    // 140us in the datasheet
 #if SLOTDURATION == 20
     TsTxOffset                =  (5215/PORT_US_PER_TICK),                  //  5215us
     TsLongGT                  =  (1311/PORT_US_PER_TICK),                  //  1311us
@@ -233,6 +235,7 @@ enum ieee154e_linkOption_enum {
 #define DURATION_rt2 ieee154e_vars.lastCapturedTime+TsTxOffset-TsLongGT-delayRx
 #define DURATION_rt3 ieee154e_vars.lastCapturedTime+TsTxOffset+TsLongGT
 #define DURATION_rt4 ieee154e_vars.lastCapturedTime+wdDataDuration
+#define DURATION_rt67 ieee154e_vars.lastCapturedTime+CCAOffset   //offset de TsTxAckDelay pour le CCA
 #define DURATION_rt5 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx-maxTxAckPrepare
 #define DURATION_rt6 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx
 #define DURATION_rt7 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx+wdRadioTx
@@ -347,6 +350,8 @@ void ieee154e_getTicsInfo(uint32_t *numTicsOn, uint32_t *numTicsTotal);
 void ieee154e_startOfFrame(PORT_TIMER_WIDTH capturedTime);
 
 void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime);
+
+void ieee154e_CCAEnd(PORT_TIMER_WIDTH capturedTime);
 
 // misc
 bool debugPrint_asn(void);

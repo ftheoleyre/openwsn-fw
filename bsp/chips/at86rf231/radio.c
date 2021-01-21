@@ -12,6 +12,7 @@
 #include "debugpins.h"
 #include "leds.h"
 #include "sctimer.h"
+#include "openserial.h"
 
 //=========================== defines =========================================
 
@@ -20,6 +21,7 @@
 typedef struct {
    radio_capture_cbt         startFrame_cb;
    radio_capture_cbt         endFrame_cb;
+    radio_capture_cbt        CCAEnd_cb;
    radio_state_t             state; 
 } radio_vars_t;
 
@@ -51,8 +53,9 @@ void radio_init(void) {
    // configure the radio
    radio_spiWriteReg(RG_TRX_STATE, CMD_FORCE_TRX_OFF);    // turn radio off
   
-   radio_spiWriteReg(RG_IRQ_MASK,
-                     (AT_IRQ_RX_START| AT_IRQ_TRX_END));  // tell radio to fire interrupt on TRX_END and RX_START
+   radio_spiWriteReg(RG_IRQ_MASK, 0x1c);
+//                     (AT_IRQ_RX_START| AT_IRQ_TRX_END | AT_IRQ_CCA_ED_DONE));
+   //(AT_IRQ_RX_START| AT_IRQ_TRX_END ));  // tell radio to fire // tell radio to fire interrupt on TRX_END and RX_START and CCA_ED_DONE
    radio_spiReadReg(RG_IRQ_STATUS);                       // deassert the interrupt pin in case is high
    radio_spiWriteReg(RG_ANT_DIV, RADIO_CHIP_ANTENNA);     // use chip antenna
 #define RG_TRX_CTRL_1 0x04
@@ -76,6 +79,23 @@ void radio_setStartFrameCb(radio_capture_cbt cb) {
 
 void radio_setEndFrameCb(radio_capture_cbt cb) {
    radio_vars.endFrame_cb    = cb;
+}
+
+void radio_setCCAEndCb(radio_capture_cbt cb) {
+   radio_vars.CCAEnd_cb    = cb;
+}
+
+//ask the radio to trigger a CCA (ED mode)
+void radio_trigger_CCA(void){
+   //force the RX mode to be sure the CCA can be triggered
+   if ((radio_spiReadReg(RG_TRX_STATUS) & 0x1F) != RX_ON){
+//      LOG_ERROR(COMPONENT_RADIO, code,
+//                (errorparameter_t) 1,
+//                (errorparameter_t) radio_spiReadReg(RG_TRX_STATUS));
+      radio_rxEnable();
+   }
+   //CCA triggered -> we will receive the CCA_END interruption (if not masked)
+   radio_spiWriteReg(RG_PHY_CC_CCA, 0xa0); //80); //SR_CCA_REQUEST & CCA_MODE(=1 for energy only));
 }
 
 //===== reset
@@ -417,6 +437,28 @@ kick_scheduler_t radio_isr(void) {
       } else {
          while(1);
       }
+   }
+    
+   // start of frame event
+   if (irq_status & AT_IRQ_CCA_ED_DONE) {
+      uint8_t  reg_value;
+      reg_value  = radio_spiReadReg(RG_TRX_STATUS);
+       
+      LOG_SUCCESS(COMPONENT_RADIO, ERR_GENERIC,
+                (errorparameter_t) reg_value,
+                (errorparameter_t) reg_value & 0x40);
+
+      //the CCA was correctely completed)
+      if((reg_value & 0x80) > 0){     //SR_CCA_DONE, bit7, 1 = correct completion
+           if ((reg_value & 0x40) > 0) //SR_CCA_STATUS, bit 6, 1 = no signal
+               radio_vars.CCAEnd_cb(CCA_IDLE);
+           else
+               radio_vars.CCAEnd_cb(CCA_BUSY);
+       }
+       else{
+           // call the callback
+           radio_vars.CCAEnd_cb(CCA_FAIL);
+       }
    }
    
    return DO_NOT_KICK_SCHEDULER;

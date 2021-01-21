@@ -36,6 +36,7 @@ void activity_synchronize_startOfFrame(PORT_TIMER_WIDTH capturedTime);
 
 void activity_synchronize_endOfFrame(PORT_TIMER_WIDTH capturedTime);
 
+
 // TX
 void activity_ti1ORri1(void);
 
@@ -81,6 +82,10 @@ void activity_ri4(PORT_TIMER_WIDTH capturedTime);
 void activity_rie3(void);
 
 void activity_ri5(PORT_TIMER_WIDTH capturedTime);
+
+void activity_ri67(PORT_TIMER_WIDTH capturedTime);
+
+void activity_rie67(void);
 
 void activity_ri6(void);
 
@@ -203,6 +208,7 @@ void ieee154e_init(void) {
 #endif
     radio_setStartFrameCb(ieee154e_startOfFrame);
     radio_setEndFrameCb(ieee154e_endOfFrame);
+    radio_setCCAEndCb(ieee154e_CCAEnd);
     // have the radio start its timer and assign ieee802154e timer with highest priority
     ieee154e_vars.timerId = opentimers_create(TIMER_TSCH, TASKPRIO_NONE);
     opentimers_scheduleAbsolute(
@@ -411,6 +417,9 @@ void isr_ieee154e_timer(opentimers_id_t id) {
         case S_RXDATA:
             activity_rie3();
             break;
+        case S_CCATRIGGERED:
+            activity_rie67();
+            break;
         case S_TXACKOFFSET:
             activity_ri6();
             break;
@@ -535,6 +544,38 @@ void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime) {
     ieee154e_dbg.num_endOfFrame++;
 }
 
+
+/**
+\brief Indicates the radio just received the result of a CCA.
+
+This function executes in ISR mode.
+*/
+void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
+
+    if (ieee154e_vars.isSync == FALSE) {
+        activity_synchronize_endOfFrame(code);
+    } else {
+        switch (ieee154e_vars.state) {
+            case S_CCATRIGGERED:
+                activity_ri67(code);
+                break;
+            default:
+                // log the error
+                LOG_ERROR(COMPONENT_IEEE802154E,
+                          ERR_WRONG_STATE_IN_CCAEND,
+                          (errorparameter_t) ieee154e_vars.state,
+                          (errorparameter_t) code
+                );
+                // abort
+                endSlot();
+                break;
+        }
+    }
+}
+  
+    
+    
+    
 //======= misc
 
 /**
@@ -1729,7 +1770,7 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
     open_addr_t parentAddress;
 
     // change state
-    changeState(S_TXACKOFFSET);
+    changeState(S_CCATRIGGERED); //S_TXACKOFFSET);  ///S_CCATRIGGERED
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
     // cancel rt4
     sctimer_actionCancel(ACTION_SET_TIMEOUT);
@@ -1867,6 +1908,10 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
         // check if ack requested
         if (ieee802514_header.ackRequested == 1 && ieee154e_vars.isAckEnabled == TRUE) {
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
+            
+            NOT TO ENTER HERE, NOT HADNLED NOW
+            CCA MODIFICATION
+            
             // get a buffer to put the ack to send in
             ieee154e_vars.ackToSend = openqueue_getFreePacketBuffer(COMPONENT_IEEE802154E);
             if (ieee154e_vars.ackToSend == NULL) {
@@ -1936,10 +1981,17 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
             radio_setFrequency(ieee154e_vars.freq, FREQ_TX);
 
 #else
+            LOG_SUCCESS(COMPONENT_IEEE802154E, ERR_GENERIC,
+                      (errorparameter_t) 11,
+                      (errorparameter_t) 1);
+
+            //CCA triggered
+            radio_trigger_CCA();
+            
             // arm rt5
             opentimers_scheduleAbsolute(
                     ieee154e_vars.timerId,                            // timerId
-                    DURATION_rt5,                                     // duration
+                    DURATION_rt67,                                     // duration
                     ieee154e_vars.startOfSlotReference,               // reference
                     TIME_TICS,                                        // timetype
                     isr_ieee154e_timer                                // callback
@@ -1986,6 +2038,63 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
     // abort
     endSlot();
 }
+
+
+//CCA result
+port_INLINE void activity_ri67(PORT_TIMER_WIDTH code) {
+    // log the non error
+   LOG_SUCCESS(COMPONENT_IEEE802154E, ERR_GENERIC,
+              (errorparameter_t) 12,
+              (errorparameter_t) code);
+
+    
+    
+    //back to the preparation
+    changeState(S_TXACKOFFSET); //S_TXACKOFFSET);  ///S_CCATRIGGERED
+
+    
+    
+    // arm rt5 for Ack preparation
+    opentimers_scheduleAbsolute(
+            ieee154e_vars.timerId,                            // timerId
+            DURATION_rt5,                                     // duration
+            ieee154e_vars.startOfSlotReference,               // reference
+            TIME_TICS,                                        // timetype
+            isr_ieee154e_timer                                // callback
+    );
+
+}
+
+
+//CCA not triggered
+port_INLINE void activity_rie67(void) {
+    // log the error
+   LOG_SUCCESS(COMPONENT_IEEE802154E, ERR_GENERIC,
+              (errorparameter_t) 13,
+              (errorparameter_t) 1);
+    
+    
+    //back to the preparation
+    changeState(S_TXACKOFFSET); //S_TXACKOFFSET);  ///S_CCATRIGGERED
+
+    
+    // arm rt5 for Ack preparation
+    opentimers_scheduleAbsolute(
+            ieee154e_vars.timerId,                            // timerId
+            DURATION_rt5,                                     // duration
+            ieee154e_vars.startOfSlotReference,               // reference
+            TIME_TICS,                                        // timetype
+            isr_ieee154e_timer                                // callback
+    );
+   
+    
+    //to be handled separately when the CCA interrupt will be really generated
+    // abort
+   // endSlot();
+
+}
+
+
 
 port_INLINE void activity_ri6(void) {
 
@@ -2792,6 +2901,7 @@ void changeState(ieee154e_state_t newstate) {
         case S_RXDATAREADY:
         case S_RXDATALISTEN:
         case S_RXDATA:
+        case S_CCATRIGGERED:
         case S_TXACKOFFSET:
         case S_TXACKPREPARE:
         case S_TXACKREADY:

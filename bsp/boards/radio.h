@@ -47,6 +47,12 @@ typedef enum {
    FREQ_RX                        = 0x02,
 } radio_freq_t;
 
+typedef enum{
+   CCA_IDLE                   = 0x00,
+   CCA_BUSY                   = 0x01,
+   CCA_FAIL                   = 0x02,
+} cca_res_t;
+
 //=========================== typedef =========================================
 
 typedef void  (*radio_capture_cbt)(PORT_TIMER_WIDTH timestamp);
@@ -59,6 +65,8 @@ typedef void  (*radio_capture_cbt)(PORT_TIMER_WIDTH timestamp);
 void                radio_init(void);
 void                radio_setStartFrameCb(radio_capture_cbt cb);
 void                radio_setEndFrameCb(radio_capture_cbt cb);
+void                radio_setCCAEndCb(radio_capture_cbt cb);
+void                radio_trigger_CCA(void);
 // reset
 void                radio_reset(void);
 // RF admin
