@@ -208,7 +208,9 @@ void ieee154e_init(void) {
 #endif
     radio_setStartFrameCb(ieee154e_startOfFrame);
     radio_setEndFrameCb(ieee154e_endOfFrame);
+#ifdef CCA_BEFORE_ACK
     radio_setCCAEndCb(ieee154e_CCAEnd);
+#endif
     // have the radio start its timer and assign ieee802154e timer with highest priority
     ieee154e_vars.timerId = opentimers_create(TIMER_TSCH, TASKPRIO_NONE);
     opentimers_scheduleAbsolute(
@@ -417,9 +419,11 @@ void isr_ieee154e_timer(opentimers_id_t id) {
         case S_RXDATA:
             activity_rie3();
             break;
+#ifdef CCA_BEFORE_ACK
         case S_CCATRIGGERED:
             activity_rie67();
             break;
+#endif
         case S_TXACKOFFSET:
             activity_ri6();
             break;
@@ -544,6 +548,7 @@ void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime) {
     ieee154e_dbg.num_endOfFrame++;
 }
 
+#ifdef CCA_BEFORE_ACK
 
 /**
 \brief Indicates the radio just received the result of a CCA.
@@ -572,7 +577,7 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
         }
     }
 }
-  
+#endif
     
     
     
@@ -1770,7 +1775,12 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
     open_addr_t parentAddress;
 
     // change state
-    changeState(S_CCATRIGGERED); //S_TXACKOFFSET);  ///S_CCATRIGGERED
+#ifdef CCA_BEFORE_ACK
+   changeState(S_CCATRIGGERED);
+#else
+   changeState(S_TXACKOFFSET);
+#endif
+   
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
     // cancel rt4
     sctimer_actionCancel(ACTION_SET_TIMEOUT);
@@ -1784,9 +1794,15 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
             isr_ieee154e_newSlot                              // callback
     );
 #endif
-    // turn off the radio
-    radio_rfOff();
-    ieee154e_vars.radioOnTics += sctimer_readCounter() - ieee154e_vars.radioOnInit;
+
+#ifdef CCA_BEFORE_ACK
+
+#else
+   // turn off the radio
+   radio_rfOff();
+   ieee154e_vars.radioOnTics += sctimer_readCounter() - ieee154e_vars.radioOnInit;
+#endif
+   
     // get a buffer to put the (received) data in
     ieee154e_vars.dataReceived = openqueue_getFreePacketBuffer(COMPONENT_IEEE802154E);
     if (ieee154e_vars.dataReceived == NULL) {
@@ -1907,11 +1923,13 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
 
         // check if ack requested
         if (ieee802514_header.ackRequested == 1 && ieee154e_vars.isAckEnabled == TRUE) {
-#ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
+   #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
             
+      #ifdef CCA_BEFORE_ACK
             NOT TO ENTER HERE, NOT HADNLED NOW
-            CCA MODIFICATION
-            
+            CCA MODIFICATION NEEDED
+      #endif
+
             // get a buffer to put the ack to send in
             ieee154e_vars.ackToSend = openqueue_getFreePacketBuffer(COMPONENT_IEEE802154E);
             if (ieee154e_vars.ackToSend == NULL) {
@@ -1980,24 +1998,40 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
             // configure the radio to listen to the default synchronizing channel
             radio_setFrequency(ieee154e_vars.freq, FREQ_TX);
 
-#else
-            LOG_SUCCESS(COMPONENT_IEEE802154E, ERR_GENERIC,
-                      (errorparameter_t) 11,
-                      (errorparameter_t) 1);
-
+   #else
+      #ifdef CCA_BEFORE_ACK
             //CCA triggered
             radio_trigger_CCA();
-            
-            // arm rt5
-            opentimers_scheduleAbsolute(
-                    ieee154e_vars.timerId,                            // timerId
-                    DURATION_rt67,                                     // duration
-                    ieee154e_vars.startOfSlotReference,               // reference
-                    TIME_TICS,                                        // timetype
-                    isr_ieee154e_timer                                // callback
-            );
-#endif
-        } else {
+           
+           // arm rt67 (CCA_END)
+           opentimers_scheduleAbsolute(
+                   ieee154e_vars.timerId,                            // timerId
+                   DURATION_rt67,                                     // duration
+                   ieee154e_vars.startOfSlotReference,               // reference
+                   TIME_TICS,                                        // timetype
+                   isr_ieee154e_timer                                // callback
+           );
+      #else
+           // arm rt5 (no CCA)
+           opentimers_scheduleAbsolute(
+                   ieee154e_vars.timerId,                            // timerId
+                   DURATION_rt5,                                     // duration
+                   ieee154e_vars.startOfSlotReference,               // reference
+                   TIME_TICS,                                        // timetype
+                   isr_ieee154e_timer                                // callback
+           );
+      #endif
+   #endif
+        }
+        //No ack is required
+        else {
+         #ifdef CCA_BEFORE_ACK
+            // turn off the radio
+            radio_rfOff();
+            ieee154e_vars.radioOnTics += sctimer_readCounter() - ieee154e_vars.radioOnInit;
+         #endif
+
+           
             // synchronize to the received packet if I'm not a DAGroot and this is my preferred parent or in case I'm
             // in the middle of the join process when parent is not yet selected or in case I don't have an autonomous
             // Tx cell cell to my parent yet
@@ -2039,20 +2073,17 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
     endSlot();
 }
 
+#ifdef CCA_BEFORE_ACK
 
 //CCA result
 port_INLINE void activity_ri67(PORT_TIMER_WIDTH code) {
-    // log the non error
-   LOG_SUCCESS(COMPONENT_IEEE802154E, ERR_GENERIC,
-              (errorparameter_t) 12,
-              (errorparameter_t) code);
-
-    
-    
-    //back to the preparation
+   // log the error
+/*  LOG_INFO(COMPONENT_IEEE802154E, ERR_GENERIC,
+             (errorparameter_t) 13,
+             (errorparameter_t) code);
+*/
+   //back to the preparation
     changeState(S_TXACKOFFSET); //S_TXACKOFFSET);  ///S_CCATRIGGERED
-
-    
     
     // arm rt5 for Ack preparation
     opentimers_scheduleAbsolute(
@@ -2062,22 +2093,19 @@ port_INLINE void activity_ri67(PORT_TIMER_WIDTH code) {
             TIME_TICS,                                        // timetype
             isr_ieee154e_timer                                // callback
     );
-
 }
 
 
 //CCA not triggered
 port_INLINE void activity_rie67(void) {
     // log the error
-   LOG_SUCCESS(COMPONENT_IEEE802154E, ERR_GENERIC,
+   LOG_INFO(COMPONENT_IEEE802154E, ERR_GENERIC,
               (errorparameter_t) 13,
               (errorparameter_t) 1);
     
-    
     //back to the preparation
-    changeState(S_TXACKOFFSET); //S_TXACKOFFSET);  ///S_CCATRIGGERED
+    changeState(S_TXACKOFFSET); 
 
-    
     // arm rt5 for Ack preparation
     opentimers_scheduleAbsolute(
             ieee154e_vars.timerId,                            // timerId
@@ -2086,13 +2114,8 @@ port_INLINE void activity_rie67(void) {
             TIME_TICS,                                        // timetype
             isr_ieee154e_timer                                // callback
     );
-   
-    
-    //to be handled separately when the CCA interrupt will be really generated
-    // abort
-   // endSlot();
-
 }
+#endif
 
 
 
@@ -2901,7 +2924,9 @@ void changeState(ieee154e_state_t newstate) {
         case S_RXDATAREADY:
         case S_RXDATALISTEN:
         case S_RXDATA:
+#ifdef CCA_BEFORE_ACK
         case S_CCATRIGGERED:
+#endif
         case S_TXACKOFFSET:
         case S_TXACKPREPARE:
         case S_TXACKREADY:

@@ -12,6 +12,9 @@
 #ifndef OPENWSN_OPENDEFS_H
 #define OPENWSN_OPENDEFS_H
 
+//activate a CCA before txing the ack
+#define CCA_BEFORE_ACK
+
 // general
 #include <stdint.h>               // needed for uin8_t, uint16_t
 #include "config.h"
@@ -289,8 +292,10 @@ enum {
    ERR_INVALID_PARAM                   = 0x53, // received an invalid parameter
    ERR_COPY_TO_SPKT                    = 0x54, // copy packet content to small packet (pkt len {} < max len {})
    ERR_COPY_TO_BPKT                    = 0x55, // copy packet content to big packet (pkt len {} > max len {})
+#ifdef CCA_BEFORE_ACK
    ERR_WRONG_STATE_IN_CCAEND           = 0x56, // wrong state {0} in CCA_END, with CCA code result {1}
    ERR_GENERIC                         = 0x57, // generic feedback, val1={0}, val2={1}
+#endif
 };
 
 

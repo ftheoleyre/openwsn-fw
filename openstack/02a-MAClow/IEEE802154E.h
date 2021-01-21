@@ -147,7 +147,9 @@ typedef enum {
     S_RXDATAPREPARE = 0x10,     // preparing for Rx data
     S_RXDATAREADY = 0x11,       // ready to Rx data, waiting for 'go'
     S_RXDATALISTEN = 0x12,      // idle listening for data
+#ifdef CCA_BEFORE_ACK
     S_CCATRIGGERED = 0x20,      // cca triggered, waiting for the result
+#endif
     S_RXDATA = 0x13,            // data SFD received, receiving more bytes
     S_TXACKOFFSET = 0x14,       // waiting to prepare for Tx ACK
     S_TXACKPREPARE = 0x15,      // preparing for Tx ACK
@@ -177,7 +179,12 @@ enum ieee154e_atomicdurations_enum {
     wdAckDuration             =  (3000/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
 #endif
 
-   CCAOffset                 = (3500/PORT_US_PER_TICK),                    // 140us in the datasheet
+#ifdef CCA_BEFORE_ACK
+   CCAOffset                 = (2000/PORT_US_PER_TICK),                    // 140us in the datasheet, measurements: some CCAs are misssed with 1900us
+#else
+   CCAOffset                 = 0,
+#endif
+   
 #if SLOTDURATION == 20
     TsTxOffset                =  (5215/PORT_US_PER_TICK),                  //  5215us
     TsLongGT                  =  (1311/PORT_US_PER_TICK),                  //  1311us
