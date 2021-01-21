@@ -83,9 +83,9 @@ void activity_rie3(void);
 
 void activity_ri5(PORT_TIMER_WIDTH capturedTime);
 
-void activity_ri67(PORT_TIMER_WIDTH capturedTime);
-
-void activity_rie67(void);
+#ifdef CCA_BEFORE_ACK
+void activity_ricca(void);
+#endif
 
 void activity_ri6(void);
 
@@ -187,7 +187,9 @@ void ieee154e_init(void) {
     ieee154e_vars.isSecurityEnabled = FALSE;
     ieee154e_vars.slotDuration = TsSlotDuration;
     ieee154e_vars.numOfSleepSlots = 1;
-
+#ifdef CCA_BEFORE_ACK
+   ieee154e_vars.CCAResult = CCA_FAIL;
+#endif
     // default hopping template
     memcpy(&(ieee154e_vars.chTemplate[0]), chTemplate_default, sizeof(ieee154e_vars.chTemplate));
 
@@ -420,11 +422,11 @@ void isr_ieee154e_timer(opentimers_id_t id) {
             activity_rie3();
             break;
 #ifdef CCA_BEFORE_ACK
-        case S_CCATRIGGERED:
-            activity_rie67();
-            break;
+       case S_CCATRIGGER:
+            activity_ricca();
+          break;
 #endif
-        case S_TXACKOFFSET:
+       case S_TXACKOFFSET:
             activity_ri6();
             break;
         case S_TXACKPREPARE:
@@ -561,10 +563,24 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
         activity_synchronize_endOfFrame(code);
     } else {
         switch (ieee154e_vars.state) {
-            case S_CCATRIGGERED:
-                activity_ri67(code);
-                break;
-            default:
+              
+            //updates the result of the last CCA
+           case S_TXACKOFFSET:
+           case S_TXACKPREPARE:
+           case S_TXACKREADY:
+              ieee154e_vars.CCAResult = code;
+              
+              LOG_ERROR(COMPONENT_IEEE802154E,
+                        ERR_GENERIC,
+                        (errorparameter_t) 10 + ieee154e_vars.state,
+                        (errorparameter_t) code
+              );
+              
+              //switch automatically to tx mode to prepare the possible tx (depending on the feedback)
+              radio_txEnable();
+              break;
+            
+           default:
                 // log the error
                 LOG_ERROR(COMPONENT_IEEE802154E,
                           ERR_WRONG_STATE_IN_CCAEND,
@@ -572,7 +588,7 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
                           (errorparameter_t) code
                 );
                 // abort
-                endSlot();
+                //endSlot();
                 break;
         }
     }
@@ -1776,9 +1792,9 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
 
     // change state
 #ifdef CCA_BEFORE_ACK
-   changeState(S_CCATRIGGERED);
+    changeState(S_CCATRIGGER);
 #else
-   changeState(S_TXACKOFFSET);
+    changeState(S_TXACKOFFSET);
 #endif
    
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
@@ -1795,8 +1811,8 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
     );
 #endif
 
+//doesn't turn the radio off if wee need to trigger a CCA during the ack preparation
 #ifdef CCA_BEFORE_ACK
-
 #else
    // turn off the radio
    radio_rfOff();
@@ -1999,20 +2015,17 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
             radio_setFrequency(ieee154e_vars.freq, FREQ_TX);
 
    #else
-      #ifdef CCA_BEFORE_ACK
-            //CCA triggered
-            radio_trigger_CCA();
-           
-           // arm rt67 (CCA_END)
+         #ifdef CCA_BEFORE_ACK
+           // arm rtcca
            opentimers_scheduleAbsolute(
                    ieee154e_vars.timerId,                            // timerId
-                   DURATION_rt67,                                     // duration
+                   DURATION_rtcca,                                   // duration
                    ieee154e_vars.startOfSlotReference,               // reference
                    TIME_TICS,                                        // timetype
                    isr_ieee154e_timer                                // callback
            );
-      #else
-           // arm rt5 (no CCA)
+         #else
+           // arm rt5
            opentimers_scheduleAbsolute(
                    ieee154e_vars.timerId,                            // timerId
                    DURATION_rt5,                                     // duration
@@ -2020,7 +2033,7 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
                    TIME_TICS,                                        // timetype
                    isr_ieee154e_timer                                // callback
            );
-      #endif
+         #endif
    #endif
         }
         //No ack is required
@@ -2073,62 +2086,45 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
     endSlot();
 }
 
+
+
 #ifdef CCA_BEFORE_ACK
+port_INLINE void activity_ricca(void) {
+  
+   //ask the radio to make a CCA (callback for the result)
+   ieee154e_vars.CCAResult = CCA_FAIL; //default CCA result
+   radio_trigger_CCA();
+   
+   // log the result of the CCA
+   LOG_ERROR(COMPONENT_IEEE802154E, ERR_GENERIC,
+             (errorparameter_t) 1,
+             (errorparameter_t) ieee154e_vars.CCAResult);
 
-//CCA result
-port_INLINE void activity_ri67(PORT_TIMER_WIDTH code) {
-   // log the error
-/*  LOG_INFO(COMPONENT_IEEE802154E, ERR_GENERIC,
-             (errorparameter_t) 13,
-             (errorparameter_t) code);
-*/
-   //back to the preparation
-    changeState(S_TXACKOFFSET); //S_TXACKOFFSET);  ///S_CCATRIGGERED
-    
-    // arm rt5 for Ack preparation
-    opentimers_scheduleAbsolute(
-            ieee154e_vars.timerId,                            // timerId
-            DURATION_rt5,                                     // duration
-            ieee154e_vars.startOfSlotReference,               // reference
-            TIME_TICS,                                        // timetype
-            isr_ieee154e_timer                                // callback
-    );
-}
-
-
-//CCA not triggered
-port_INLINE void activity_rie67(void) {
-    // log the error
-   LOG_INFO(COMPONENT_IEEE802154E, ERR_GENERIC,
-              (errorparameter_t) 13,
-              (errorparameter_t) 1);
-    
-    //back to the preparation
-    changeState(S_TXACKOFFSET); 
-
-    // arm rt5 for Ack preparation
-    opentimers_scheduleAbsolute(
-            ieee154e_vars.timerId,                            // timerId
-            DURATION_rt5,                                     // duration
-            ieee154e_vars.startOfSlotReference,               // reference
-            TIME_TICS,                                        // timetype
-            isr_ieee154e_timer                                // callback
-    );
+    //ok for sending the ack
+   changeState(S_TXACKOFFSET);
+   
+   // arm rt5
+   opentimers_scheduleAbsolute(
+           ieee154e_vars.timerId,                            // timerId
+           DURATION_rt5,                                     // duration
+           ieee154e_vars.startOfSlotReference,               // reference
+           TIME_TICS,                                        // timetype
+           isr_ieee154e_timer                                // callback
+   );
 }
 #endif
 
 
-
 port_INLINE void activity_ri6(void) {
 
-    // change state
-    changeState(S_TXACKPREPARE);
+   // change state
+   changeState(S_TXACKPREPARE);
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
 #else
-    // arm rt6
+   // arm rt6
     opentimers_scheduleAbsolute(
             ieee154e_vars.timerId,                            // timerId
-            DURATION_rt6,                                     // duration
+            DURATION_rt6,                                   // cca
             ieee154e_vars.startOfSlotReference,               // reference
             TIME_TICS,                                        // timetype
             isr_ieee154e_timer                                // callback
@@ -2202,6 +2198,17 @@ port_INLINE void activity_ri6(void) {
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
     changeState(S_TXACKDELAY);
 #endif
+   
+   LOG_ERROR(COMPONENT_IEEE802154E, ERR_GENERIC,
+             (errorparameter_t) 2,
+             (errorparameter_t) ieee154e_vars.CCAResult);
+
+   //the CCA denotes the medium is busy -> stops the ack
+   if(ieee154e_vars.CCAResult == CCA_BUSY){
+      // abort
+      endSlot();
+   }
+   
 }
 
 port_INLINE void activity_rie4(void) {
@@ -2920,13 +2927,13 @@ void changeState(ieee154e_state_t newstate) {
         case S_RXACKLISTEN:
         case S_RXACK:
         case S_TXPROC:
+#ifdef CCA_BEFORE_ACK
+       case S_CCATRIGGER:
+#endif
         case S_RXDATAPREPARE:
         case S_RXDATAREADY:
         case S_RXDATALISTEN:
         case S_RXDATA:
-#ifdef CCA_BEFORE_ACK
-        case S_CCATRIGGERED:
-#endif
         case S_TXACKOFFSET:
         case S_TXACKPREPARE:
         case S_TXACKREADY:

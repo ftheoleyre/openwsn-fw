@@ -147,11 +147,11 @@ typedef enum {
     S_RXDATAPREPARE = 0x10,     // preparing for Rx data
     S_RXDATAREADY = 0x11,       // ready to Rx data, waiting for 'go'
     S_RXDATALISTEN = 0x12,      // idle listening for data
-#ifdef CCA_BEFORE_ACK
-    S_CCATRIGGERED = 0x20,      // cca triggered, waiting for the result
-#endif
     S_RXDATA = 0x13,            // data SFD received, receiving more bytes
     S_TXACKOFFSET = 0x14,       // waiting to prepare for Tx ACK
+#ifdef CCA_BEFORE_ACK
+    S_CCATRIGGER = 0x20,        // trigger a CCA before txing the ACK
+#endif
     S_TXACKPREPARE = 0x15,      // preparing for Tx ACK
     S_TXACKREADY = 0x16,        // Tx ACK ready, waiting for 'go'
     S_TXACKDELAY = 0x17,        // 'go' signal given, waiting for SFD Tx ACK
@@ -179,11 +179,6 @@ enum ieee154e_atomicdurations_enum {
     wdAckDuration             =  (3000/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
 #endif
 
-#ifdef CCA_BEFORE_ACK
-   CCAOffset                 = (2000/PORT_US_PER_TICK),                    // 140us in the datasheet, measurements: some CCAs are misssed with 1900us
-#else
-   CCAOffset                 = 0,
-#endif
    
 #if SLOTDURATION == 20
     TsTxOffset                =  (5215/PORT_US_PER_TICK),                  //  5215us
@@ -242,8 +237,11 @@ enum ieee154e_linkOption_enum {
 #define DURATION_rt2 ieee154e_vars.lastCapturedTime+TsTxOffset-TsLongGT-delayRx
 #define DURATION_rt3 ieee154e_vars.lastCapturedTime+TsTxOffset+TsLongGT
 #define DURATION_rt4 ieee154e_vars.lastCapturedTime+wdDataDuration
-#define DURATION_rt67 ieee154e_vars.lastCapturedTime+CCAOffset   //offset de TsTxAckDelay pour le CCA
 #define DURATION_rt5 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx-maxTxAckPrepare
+#ifdef CCA_BEFORE_ACK
+   #define CCAdelay  (700/PORT_US_PER_TICK)     //128us for a CCA according to the spec
+   #define DURATION_rtcca DURATION_rt5-CCAdelay
+#endif
 #define DURATION_rt6 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx
 #define DURATION_rt7 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx+wdRadioTx
 #define DURATION_rt8 ieee154e_vars.lastCapturedTime+wdAckDuration
@@ -305,6 +303,10 @@ typedef struct {
     uint32_t receivedFrameFromParent;               // True when received a frame from parent
 
     uint16_t compensatingCounter;
+
+#ifdef CCA_BEFORE_ACK   //for CCA before ack
+   uint8_t    CCAResult;                            // Result of the last CCA
+#endif
 } ieee154e_vars_t;
 
 BEGIN_PACK
