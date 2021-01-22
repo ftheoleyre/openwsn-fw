@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "coap.h"
+#include "opentimers.h"
 
 //=========================== define ==========================================
 

@@ -12,6 +12,9 @@
 #ifndef OPENWSN_OPENDEFS_H
 #define OPENWSN_OPENDEFS_H
 
+
+//#define OPENWSN_EXAMPLE_C
+
 //activate a CCA before txing the ack
 #define CCA_BEFORE_ACK
 

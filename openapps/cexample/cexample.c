@@ -4,7 +4,10 @@
 
 #include "config.h"
 
-#if OPENWSN_EXAMPLE_C
+
+
+#if OPENWSN_CEXAMPLE_C
+
 
 #include "opendefs.h"
 #include "cexample.h"
@@ -22,8 +25,8 @@
 //=========================== defines =========================================
 
 /// inter-packet period (in ms)
-#define CEXAMPLEPERIOD  10000
-#define PAYLOADLEN      40
+#define CEXAMPLEPERIOD  5000
+#define PAYLOADLEN      20
 
 const uint8_t cexample_path0[] = "ex";
 
@@ -47,6 +50,8 @@ void cexample_sendDone(OpenQueueEntry_t *msg,
                        owerror_t error);
 
 //=========================== public ==========================================
+
+
 
 void cexample_init(void) {
 
@@ -90,6 +95,10 @@ void cexample_timer_cb(opentimers_id_t id) {
     cexample_task_cb();
 }
 
+static const uint8_t ipAddr_coapserver[] = {0x20, 0x01, 0x06, 0x60, 0x47, 0x01, 0x10, 0x01, \
+                                           0x08, 0x3a, 0x7f, 0xfb, 0x24, 0x22, 0xf4, 0xf8};
+
+
 void cexample_task_cb(void) {
     OpenQueueEntry_t *pkt;
     owerror_t outcome;
@@ -105,6 +114,8 @@ void cexample_task_cb(void) {
     uint8_t N_avg = 10;
     uint8_t medtype;
 
+  
+    
     // don't run if not synch
     if (ieee154e_isSynch() == FALSE) {
         return;
@@ -172,7 +183,7 @@ void cexample_task_cb(void) {
     pkt->l4_destination_port = WKP_UDP_COAP;
     pkt->l3_destinationAdd.type = ADDR_128B;
     // does the ipAddr_motesEecs still work?
-    memcpy(&pkt->l3_destinationAdd.addr_128b[0], &ipAddr_motesEecs, 16);
+    memcpy(&pkt->l3_destinationAdd.addr_128b[0], &ipAddr_coapserver, 16);
 
     // send
     outcome = coap_send(

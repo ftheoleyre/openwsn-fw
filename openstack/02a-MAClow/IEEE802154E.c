@@ -19,6 +19,7 @@
 #include "openrandom.h"
 #include "msf.h"
 
+
 //=========================== definition ======================================
 
 //=========================== variables =======================================
@@ -570,12 +571,12 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
            case S_TXACKREADY:
               ieee154e_vars.CCAResult = code;
               
-              LOG_ERROR(COMPONENT_IEEE802154E,
+              /*LOG_ERROR(COMPONENT_IEEE802154E,
                         ERR_GENERIC,
                         (errorparameter_t) 10 + ieee154e_vars.state,
                         (errorparameter_t) code
               );
-              
+              */
               //switch automatically to tx mode to prepare the possible tx (depending on the feedback)
               radio_txEnable();
               break;
@@ -2095,12 +2096,7 @@ port_INLINE void activity_ricca(void) {
    ieee154e_vars.CCAResult = CCA_FAIL; //default CCA result
    radio_trigger_CCA();
    
-   // log the result of the CCA
-   LOG_ERROR(COMPONENT_IEEE802154E, ERR_GENERIC,
-             (errorparameter_t) 1,
-             (errorparameter_t) ieee154e_vars.CCAResult);
-
-    //ok for sending the ack
+    //ok for preparing the ack (will be txed if CCA_IDLE later)
    changeState(S_TXACKOFFSET);
    
    // arm rt5
@@ -2198,13 +2194,13 @@ port_INLINE void activity_ri6(void) {
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
     changeState(S_TXACKDELAY);
 #endif
-   
-   LOG_ERROR(COMPONENT_IEEE802154E, ERR_GENERIC,
-             (errorparameter_t) 2,
-             (errorparameter_t) ieee154e_vars.CCAResult);
 
    //the CCA denotes the medium is busy -> stops the ack
-   if(ieee154e_vars.CCAResult == CCA_BUSY){
+   if(ieee154e_vars.CCAResult != CCA_IDLE){
+      LOG_ERROR(COMPONENT_IEEE802154E, ERR_GENERIC,
+                (errorparameter_t) 2,
+                (errorparameter_t) ieee154e_vars.CCAResult);
+
       // abort
       endSlot();
    }
