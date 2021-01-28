@@ -71,6 +71,7 @@ typedef enum {
     SIX_STATE_WAIT_COUNTRESPONSE = 0x0a,
     SIX_STATE_WAIT_LISTRESPONSE = 0x0b,
     SIX_STATE_WAIT_CLEARRESPONSE = 0x0c,
+    SIX_STATE_WAIT_WAITADDREQUEST = 0x0d,
 } six2six_state_t;
 
 typedef enum {
@@ -109,6 +110,7 @@ typedef struct {
     opentimers_id_t timeoutTimerId;                 // TimeOut timer id
     uint16_t kaPeriod;                              // period of sending KA
     six2six_state_t six2six_state;
+    open_addr_t neighborOngoing3Steps;              // neighbor address with which we have an ongoing 3-steps handshake
     uint8_t commandID;
     uint8_t cellOptions;
     cellInfo_ht celllist_toDelete[CELLLIST_MAX_LEN];

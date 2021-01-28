@@ -274,7 +274,6 @@ void msf_timer_clear_task(void) {
 void msf_trigger6pAdd(void) {
     open_addr_t neighbor;
     bool foundNeighbor;
-    cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
 
     uint8_t cellOptions;
 
@@ -304,7 +303,22 @@ void msf_trigger6pAdd(void) {
             return;
         }
     }
-
+   
+#ifdef THREE_STEPS_HANDSHAKE
+   sixtop_request(
+           IANA_6TOP_CMD_ADD,           // code
+           &neighbor,                   // neighbor
+           NUMCELLS_MSF,                // number cells
+           cellOptions,                 // cellOptions
+           NULL,                        // celllist to add
+           NULL,                        // celllist to delete (not used)
+           IANA_6TISCH_SFID_MSF,        // sfid
+           0,                           // list command offset (not used)
+           0                            // list command maximum celllist (not used)
+   );
+#else
+    cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
+    
     if (msf_candidateAddCellList(celllist_add, NUMCELLS_MSF) == FALSE) {
         // failed to get cell list to add
         return;
@@ -321,6 +335,7 @@ void msf_trigger6pAdd(void) {
             0,                           // list command offset (not used)
             0                            // list command maximum celllist (not used)
     );
+#endif
 }
 
 void msf_trigger6pDelete(void) {

@@ -12,11 +12,17 @@
 #ifndef OPENWSN_OPENDEFS_H
 #define OPENWSN_OPENDEFS_H
 
-
-//#define OPENWSN_EXAMPLE_C
-
 //activate a CCA before txing the ack
-#define CCA_BEFORE_ACK
+#define ANYCAST_LL
+#ifdef ANYCAST_LL
+   #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
+#endif
+
+
+// 3 steps or 2 steps handshake
+// by default: 2 steps
+#define THREE_STEPS_HANDSHAKE
+
 
 // general
 #include <stdint.h>               // needed for uin8_t, uint16_t
@@ -298,6 +304,8 @@ enum {
 #ifdef CCA_BEFORE_ACK
    ERR_WRONG_STATE_IN_CCAEND           = 0x56, // wrong state {0} in CCA_END, with CCA code result {1}
    ERR_GENERIC                         = 0x57, // generic feedback, val1={0}, val2={1}
+   ERR_CCA_BUSY                        = 0x58, // The CCA before the ack forbids the tx (state {0})
+   ERR_BAD_CELLOPTIONS                 = 0x59, // Unknown cell option for a cell to add (celloption {0}, location {1})
 #endif
 };
 
@@ -447,6 +455,7 @@ typedef struct {
     uint8_t backoff;
 } neighborRow_t;
 END_PACK
+
 
 
 //=========================== variables =======================================
