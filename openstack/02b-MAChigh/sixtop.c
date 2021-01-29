@@ -83,7 +83,8 @@ bool sixtop_addCells(
         uint8_t slotframeID,
         cellInfo_ht *cellList,
         open_addr_t *previousHop,
-        uint8_t cellOptions
+        uint8_t cellOptions,
+        uint8_t priority
 );
 
 bool sixtop_removeCells(
@@ -631,6 +632,7 @@ owerror_t sixtop_send_internal(
                 TRUE,                                                            // shared?
                 TRUE,                                                            // auto cell?
                 msf_hashFunction_getChanneloffset(&(msg->l2_nextORpreviousHop)), // channel offset
+                0,                                                               // default priority
                 &(msg->l2_nextORpreviousHop)                                     // neighbor
         );
     }
@@ -992,7 +994,8 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                             msg->l2_sixtop_frameID,
                             msg->l2_sixtop_celllist_add,
                             &(msg->l2_nextORpreviousHop),
-                            msg->l2_sixtop_cellOptions
+                            msg->l2_sixtop_cellOptions,
+                            msg->l2_sixtop_priority
                     );
               
                   if (sixtop_vars.six2six_state == SIX_STATE_WAIT_WAITADDREQUEST)
@@ -1019,7 +1022,8 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                             msg->l2_sixtop_frameID,
                             msg->l2_sixtop_celllist_add,
                             &(msg->l2_nextORpreviousHop),
-                            msg->l2_sixtop_cellOptions
+                            msg->l2_sixtop_cellOptions,
+                            msg->l2_sixtop_priority
                     );
                 }
 
@@ -1140,6 +1144,7 @@ void sixtop_six2six_notifyReceive(
     uint16_t i;
     uint16_t slotoffset;
     uint16_t channeloffset;
+    uint8_t priority;
     uint16_t numCells;
     uint16_t temp16;
     OpenQueueEntry_t * response_pkt;
@@ -1286,7 +1291,8 @@ void sixtop_six2six_notifyReceive(
                                     &(pkt->l2_nextORpreviousHop),
                                     cellOptions_transformed,
                                     &slotoffset,
-                                    &channeloffset)
+                                    &channeloffset,
+                                    &priority)
                             ) {
                         // found one cell after slot offset+i
                         packetfunctions_reserveHeader(&response_pkt, 4);
@@ -1309,7 +1315,8 @@ void sixtop_six2six_notifyReceive(
                                 &(pkt->l2_nextORpreviousHop),
                                 cellOptions_transformed,
                                 &slotoffset,
-                                &channeloffset) == FALSE
+                                &channeloffset,
+                                &priority) == FALSE
                         ) {
                     returnCode = IANA_6TOP_RC_EOL;
                 }
@@ -1334,7 +1341,8 @@ void sixtop_six2six_notifyReceive(
                                     &(pkt->l2_nextORpreviousHop),
                                     cellOptions_transformed,
                                     &slotoffset,
-                                    &channeloffset)
+                                    &channeloffset,
+                                    &priority)
                             ) {
                         // found one cell after slot i
                         numCells++;
@@ -1682,7 +1690,8 @@ void sixtop_six2six_notifyReceive(
                             sixtop_vars.cb_sf_getMetadata(),      // frame id
                             pkt->l2_sixtop_celllist_add,          // celllist to be added
                             &(pkt->l2_nextORpreviousHop),         // neighbor that cells to be added to
-                            sixtop_vars.cellOptions               // cell options
+                            sixtop_vars.cellOptions,              // cell options
+                            sixtop_vars.priority
                     );
              
                     neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
@@ -1733,7 +1742,8 @@ void sixtop_six2six_notifyReceive(
                             sixtop_vars.cb_sf_getMetadata(),     // frame id
                             pkt->l2_sixtop_celllist_add,  // celllist to be added
                             &(pkt->l2_nextORpreviousHop), // neighbor that cells to be added to
-                            sixtop_vars.cellOptions       // cell options
+                            sixtop_vars.cellOptions,      // cell options
+                            sixtop_vars.priority          // priority in RX
                     );
                     neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     break;
@@ -1815,7 +1825,8 @@ bool sixtop_addCells(
         uint8_t slotframeID,
         cellInfo_ht *cellList,
         open_addr_t *previousHop,
-        uint8_t cellOptions
+        uint8_t cellOptions,
+        uint8_t priority
 ) {
     uint8_t i;
     bool isShared;
@@ -1865,8 +1876,7 @@ bool sixtop_addCells(
                      temp_neighbor.addr_64b[6],
                      temp_neighbor.addr_64b[7]);           
            
-            schedule_addActiveSlot(cellList[i].slotoffset, type, isShared, FALSE, cellList[i].channeloffset,
-                                   &temp_neighbor);
+            schedule_addActiveSlot(cellList[i].slotoffset, type, isShared, FALSE, cellList[i].channeloffset, priority, &temp_neighbor);
         }
     }
     return hasCellsAdded;

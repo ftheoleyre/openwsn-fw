@@ -396,6 +396,7 @@ typedef struct {
     uint8_t l2_sixtop_messageType;                             // indicating the sixtop message type
     uint8_t l2_sixtop_command;                                 // command of the received 6p request, recorded in 6p response
     uint8_t l2_sixtop_cellOptions;                             // celloptions, used when 6p response senddone. (it's the same with cellOptions in 6p request but with TX and RX bits have been flipped)
+    uint8_t l2_sixtop_priority;                                // priority (RX) for the sixtop cells to add
     uint8_t l2_sixtop_returnCode;                              // return code in 6P response
     uint8_t *l2_ASNpayload;                                    // pointer to the ASN in EB
     uint8_t *l2_nextHop_payload;                               // pointer to the nexthop address in frame

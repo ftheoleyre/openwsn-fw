@@ -113,6 +113,7 @@ typedef struct {
     open_addr_t neighborOngoing3Steps;              // neighbor address with which we have an ongoing 3-steps handshake
     uint8_t commandID;
     uint8_t cellOptions;
+    uint8_t priority;
     cellInfo_ht celllist_toDelete[CELLLIST_MAX_LEN];
     sixtop_sf_getsfid_cbt cb_sf_getsfid;
     sixtop_sf_getmetadata_cbt cb_sf_getMetadata;

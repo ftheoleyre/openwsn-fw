@@ -2197,12 +2197,12 @@ port_INLINE void activity_ri6(void) {
 
    //the CCA denotes the medium is busy -> stops the ack
    if(ieee154e_vars.CCAResult != CCA_IDLE){
-      LOG_ERROR(COMPONENT_IEEE802154E, ERR_GENERIC,
+      LOG_ERROR(COMPONENT_IEEE802154E, ERR_CCA_BUSY,
                 (errorparameter_t) 2,
                 (errorparameter_t) ieee154e_vars.CCAResult);
 
       // abort
-      endSlot();
+      //endSlot();
    }
    
 }
@@ -2607,6 +2607,7 @@ bool isValidEbFormat(OpenQueueEntry_t *pkt, uint16_t *lenIE) {
                                     TRUE,          // shared?
                                     FALSE,         // auto cell
                                     channeloffset, // channel offset
+                                    0,             // default priority
                                     &temp_neighbor // neighbor
                             );
                         }

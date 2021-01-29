@@ -81,6 +81,7 @@ void schedule_startDAGroot(void) {
                 TRUE,                                   // shared?
                 FALSE,                                  // auto cell?
                 SCHEDULE_MINIMAL_6TISCH_CHANNELOFFSET,  // channel offset
+                0,                                      // default priority
                 &temp_neighbor                          // neighbor
         );
     }
@@ -112,6 +113,7 @@ bool debugPrint_schedule(void) {
     temp.numRx = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].numRx;
     temp.numTx = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].numTx;
     temp.numTxACK = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].numTxACK;
+    temp.priority = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].priority;
     memcpy(&temp.lastUsedAsn, &schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].lastUsedAsn, sizeof(asn_t));
 
     // send status data over serial port
@@ -211,6 +213,7 @@ void schedule_getSlotInfo(slotOffset_t slotOffset, slotinfo_element_t *info) {
             info->slotOffset = slotOffset;
             info->channelOffset = slotContainer->channelOffset;
             info->isAutoCell = slotContainer->isAutoCell;
+            info->priority = slotContainer->priority;
             memcpy(&(info->address), &(slotContainer->neighbor), sizeof(open_addr_t));
             return; //as this is an update. No need to re-insert as it is in the same position on the list.
         }
@@ -221,6 +224,7 @@ void schedule_getSlotInfo(slotOffset_t slotOffset, slotinfo_element_t *info) {
     info->shared = FALSE;
     info->channelOffset = 0;        //set to zero if not set.
     info->isAutoCell = FALSE;
+    info->priority = 0;
     memset(&(info->address), 0, sizeof(open_addr_t));
 }
 
@@ -240,6 +244,7 @@ owerror_t schedule_addActiveSlot(
         bool shared,
         bool isAutoCell,
         channelOffset_t channelOffset,
+        uint8_t priority,
         open_addr_t *neighbor
 ) {
     uint8_t asn[5];
@@ -321,6 +326,7 @@ owerror_t schedule_addActiveSlot(
             backupEntry->shared = slotContainer->shared;
             backupEntry->channelOffset = slotContainer->channelOffset;
             backupEntry->isAutoCell = slotContainer->isAutoCell;
+            backupEntry->priority = slotContainer->priority;
 
             memcpy(&(backupEntry->neighbor), &(slotContainer->neighbor), sizeof(open_addr_t));
 
@@ -337,6 +343,7 @@ owerror_t schedule_addActiveSlot(
             slotContainer->shared = shared;
             slotContainer->channelOffset = channelOffset;
             slotContainer->isAutoCell = isAutoCell;
+            slotContainer->priority = priority;
             memcpy(&(slotContainer->neighbor), neighbor, sizeof(open_addr_t));
 
             // fill that schedule entry with current asn
@@ -351,6 +358,7 @@ owerror_t schedule_addActiveSlot(
             backupEntry->shared = shared;
             backupEntry->channelOffset = channelOffset;
             backupEntry->isAutoCell = isAutoCell;
+            backupEntry->priority = priority;
             memcpy(&backupEntry->neighbor, neighbor, sizeof(open_addr_t));
 
             // fill that schedule entry with current asn
@@ -372,6 +380,7 @@ owerror_t schedule_addActiveSlot(
     slotContainer->shared = shared;
     slotContainer->channelOffset = channelOffset;
     slotContainer->isAutoCell = isAutoCell;
+    slotContainer->priority = priority;
     memcpy(&(slotContainer->neighbor), neighbor, sizeof(open_addr_t));
 
     // fill that schedule entry with current asn
@@ -511,6 +520,7 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
         backupEntry->lastUsedAsn.bytes0and1 = 0;
         backupEntry->lastUsedAsn.bytes2and3 = 0;
         backupEntry->lastUsedAsn.byte4 = 0;
+        backupEntry->priority = 0;
         backupEntry->next = NULL;
 
         ENABLE_INTERRUPTS();
@@ -536,12 +546,14 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
             slotContainer->shared = slotContainer->backupEntries[candidate_index].shared;
             slotContainer->channelOffset = slotContainer->backupEntries[candidate_index].channelOffset;
             slotContainer->isAutoCell = slotContainer->backupEntries[candidate_index].isAutoCell;
+            slotContainer->priority = slotContainer->backupEntries[candidate_index].priority;
             memcpy(&slotContainer->neighbor, &(slotContainer->backupEntries[candidate_index].neighbor),
                    sizeof(open_addr_t));
 
             slotContainer->numTx = slotContainer->backupEntries[candidate_index].numTx;
             slotContainer->numRx = slotContainer->backupEntries[candidate_index].numRx;
             slotContainer->numTxACK = slotContainer->backupEntries[candidate_index].numTxACK;
+            slotContainer->priority = slotContainer->backupEntries[candidate_index].priority;
             slotContainer->lastUsedAsn.bytes0and1 = slotContainer->backupEntries[candidate_index].lastUsedAsn.bytes0and1;
             slotContainer->lastUsedAsn.bytes2and3 = slotContainer->backupEntries[candidate_index].lastUsedAsn.bytes2and3;
             slotContainer->lastUsedAsn.byte4 = slotContainer->backupEntries[candidate_index].lastUsedAsn.byte4;
@@ -1065,6 +1077,26 @@ channelOffset_t schedule_getChannelOffset(void) {
 }
 
 /**
+\brief Get the priority of the current schedule entry.
+
+\returns The priority of the current schedule entry.
+*/
+uint8_t schedule_getPriority(void) {
+    uint8_t returnVal;
+
+    INTERRUPT_DECLARATION();
+    DISABLE_INTERRUPTS();
+
+    returnVal = schedule_vars.currentScheduleEntry->priority;
+
+    ENABLE_INTERRUPTS();
+
+    return returnVal;
+}
+
+
+
+/**
 \brief Check whether I can send on this slot.
 
 This function is called at the beginning of every TX slot.
@@ -1197,7 +1229,7 @@ void schedule_indicateTx(asn_t *asnTimestamp, bool succesfullTx) {
 }
 
 bool schedule_getOneCellAfterOffset(uint8_t metadata, uint8_t offset, open_addr_t *neighbor, uint8_t cellOptions,
-                                    uint16_t *slotoffset, uint16_t *channeloffset) {
+                                    uint16_t *slotoffset, uint16_t *channeloffset, uint8_t *priority) {
     bool returnVal;
     scheduleEntry_t *scheduleWalker;
     cellType_t type;
@@ -1221,6 +1253,7 @@ bool schedule_getOneCellAfterOffset(uint8_t metadata, uint8_t offset, open_addr_
         if (type == scheduleWalker->type && scheduleWalker->slotOffset >= offset) {
             *slotoffset = scheduleWalker->slotOffset;
             *channeloffset = scheduleWalker->channelOffset;
+            *priority = scheduleWalker->priority;
             returnVal = TRUE;
             break;
         }
@@ -1251,6 +1284,7 @@ void schedule_resetEntry(scheduleEntry_t *e) {
     e->numRx = 0;
     e->numTx = 0;
     e->numTxACK = 0;
+    e->priority = 0;
     e->lastUsedAsn.bytes0and1 = 0;
     e->lastUsedAsn.bytes2and3 = 0;
     e->lastUsedAsn.byte4 = 0;
@@ -1269,6 +1303,7 @@ void schedule_resetBackupEntry(backupEntry_t *e) {
     e->numRx = 0;
     e->numTx = 0;
     e->numTxACK = 0;
+    e->priority = 0;
     e->lastUsedAsn.bytes0and1 = 0;
     e->lastUsedAsn.bytes2and3 = 0;
     e->lastUsedAsn.byte4 = 0;

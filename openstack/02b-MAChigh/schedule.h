@@ -123,6 +123,7 @@ typedef struct {
     uint8_t numRx;
     uint8_t numTx;
     uint8_t numTxACK;
+    uint8_t priority;    //if multiple RX
     asn_t lastUsedAsn;
     void *next;
 } backupEntry_t;
@@ -137,6 +138,7 @@ typedef struct {
     uint8_t numRx;
     uint8_t numTx;
     uint8_t numTxACK;
+    uint8_t priority;    //if multiple RX
     asn_t lastUsedAsn;
     backupEntry_t backupEntries[MAXBACKUPSLOTS];
     void *next;
@@ -153,6 +155,7 @@ typedef struct {
     uint8_t numRx;
     uint8_t numTx;
     uint8_t numTxACK;
+    uint8_t priority;    //if multiple RX
     asn_t lastUsedAsn;
 } debugScheduleEntry_t;
 END_PACK
@@ -161,6 +164,7 @@ typedef struct {
     open_addr_t address;
     cellType_t link_type;
     bool shared;
+    uint8_t priority;
     slotOffset_t slotOffset;
     channelOffset_t channelOffset;
     bool isAutoCell;
@@ -204,6 +208,7 @@ owerror_t schedule_addActiveSlot(
         bool shared,
         bool isAutoCell,
         uint8_t channelOffset,
+        uint8_t priority,
         open_addr_t *neighbor
 );
 
@@ -270,6 +275,8 @@ slotOffset_t schedule_getSlottOffset(void);
 
 channelOffset_t schedule_getChannelOffset(void);
 
+uint8_t schedule_getPriority(void);
+
 bool schedule_getOkToSend(void);
 
 void schedule_resetBackoff(void);
@@ -285,7 +292,8 @@ bool schedule_getOneCellAfterOffset(
         open_addr_t *neighbor,
         uint8_t cellOptions,
         uint16_t *slotoffset,
-        uint16_t *channeloffset
+        uint16_t *channeloffset,
+        uint8_t *priority
 );
 /**
 \}

@@ -95,10 +95,6 @@ void cexample_timer_cb(opentimers_id_t id) {
     cexample_task_cb();
 }
 
-static const uint8_t ipAddr_coapserver[] = {0x20, 0x01, 0x06, 0x60, 0x47, 0x01, 0x10, 0x01, \
-                                           0x08, 0x3a, 0x7f, 0xfb, 0x24, 0x22, 0xf4, 0xf8};
-
-
 void cexample_task_cb(void) {
     OpenQueueEntry_t *pkt;
     owerror_t outcome;

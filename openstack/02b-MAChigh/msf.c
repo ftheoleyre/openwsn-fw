@@ -66,6 +66,7 @@ void msf_init(void) {
             FALSE,                                                           // shared?
             TRUE,                                                            // auto cell?
             msf_hashFunction_getChanneloffset(idmanager_getMyID(ADDR_64B)),  // channel offset
+            0,                                                               // default priority
             &temp_neighbor                                                   // neighbor
     );
 
