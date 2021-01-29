@@ -91,6 +91,8 @@ void neighbors_setNeighborNoResource(open_addr_t *address);
 
 void neighbors_setPreferredParent(uint8_t index, bool isPreferred);
 
+void neighbors_setSecondPreferredParent(uint8_t index, bool isSecondPreferred);
+
 // interrogators
 bool neighbors_isStableNeighbor(open_addr_t *address);
 

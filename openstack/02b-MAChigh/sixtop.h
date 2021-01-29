@@ -64,6 +64,7 @@ typedef enum {
     SIX_STATE_WAIT_COUNTREQUEST_SENDDONE = 0x04,
     SIX_STATE_WAIT_LISTREQUEST_SENDDONE = 0x05,
     SIX_STATE_WAIT_CLEARREQUEST_SENDDONE = 0x06,
+    SIX_STATE_WAIT_ADDREQUEST_ANYCAST_SENDDONE = 0x0e,
     // waiting for response from the neighbor
     SIX_STATE_WAIT_ADDRESPONSE = 0x07,
     SIX_STATE_WAIT_DELETERESPONSE = 0x08,
@@ -72,6 +73,7 @@ typedef enum {
     SIX_STATE_WAIT_LISTRESPONSE = 0x0b,
     SIX_STATE_WAIT_CLEARRESPONSE = 0x0c,
     SIX_STATE_WAIT_WAITADDREQUEST = 0x0d,
+    SIX_STATE_WAIT_WAITADDREQUEST_ANYCAST = 0x10
 } six2six_state_t;
 
 typedef enum {
@@ -111,9 +113,11 @@ typedef struct {
     uint16_t kaPeriod;                              // period of sending KA
     six2six_state_t six2six_state;
     open_addr_t neighborOngoing3Steps;              // neighbor address with which we have an ongoing 3-steps handshake
+    open_addr_t neigbor_secondReceiver;             // second receiver for the anycast negociation
     uint8_t commandID;
     uint8_t cellOptions;
     uint8_t priority;
+    
     cellInfo_ht celllist_toDelete[CELLLIST_MAX_LEN];
     sixtop_sf_getsfid_cbt cb_sf_getsfid;
     sixtop_sf_getmetadata_cbt cb_sf_getMetadata;
@@ -138,6 +142,7 @@ void sixtop_setSFcallback(
 owerror_t sixtop_request(
         uint8_t code,
         open_addr_t *neighbor,
+        open_addr_t *neighbor2,
         uint8_t numCells,
         uint8_t cellOptions,
         cellInfo_ht *celllist_toBeAdded,

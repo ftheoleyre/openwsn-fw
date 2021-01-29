@@ -260,6 +260,7 @@ void msf_timer_clear_task(void) {
     sixtop_request(
             IANA_6TOP_CMD_CLEAR,       // code
             &neighbor,                 // neighbor
+            NULL,                      // no second receiver
             NUMCELLS_MSF,              // number cells
             CELLOPTIONS_MSF,           // cellOptions (not used)
             NULL,                      // celllist to add (not used)
@@ -274,10 +275,13 @@ void msf_timer_clear_task(void) {
 
 void msf_trigger6pAdd(void) {
     open_addr_t neighbor;
-    bool foundNeighbor;
-
+#ifdef ANYCAST_SCHEDULING
+   open_addr_t neighbor2;
+#endif
+    bool foundNeighbor, foundSecondParent;
     uint8_t cellOptions;
-
+   
+ 
     if (ieee154e_isSynch() == FALSE) {
         return;
     }
@@ -291,7 +295,8 @@ void msf_trigger6pAdd(void) {
     if (foundNeighbor == FALSE) {
         return;
     }
-
+   
+   
     // check what type of cell need to add
 
     if (msf_vars.needAddTx) {
@@ -304,11 +309,15 @@ void msf_trigger6pAdd(void) {
             return;
         }
     }
-   
-#ifdef THREE_STEPS_HANDSHAKE
-   sixtop_request(
+
+// anycast scheduling: I will send a requrest to TWO receivers
+#ifdef ANYCAST_SCHEDULING 
+   foundSecondParent = icmpv6rpl_getSecondPreferredParentEui64(&neighbor2);
+   if (foundSecondParent)
+      sixtop_request(
            IANA_6TOP_CMD_ADD,           // code
-           &neighbor,                   // neighbor
+           &neighbor,                   // neighbor 1 (priority = 1)
+           &neighbor2,                  // neigbor 2 (priority = 2)
            NUMCELLS_MSF,                // number cells
            cellOptions,                 // cellOptions
            NULL,                        // celllist to add
@@ -317,6 +326,35 @@ void msf_trigger6pAdd(void) {
            0,                           // list command offset (not used)
            0                            // list command maximum celllist (not used)
    );
+   else
+      sixtop_request(
+        IANA_6TOP_CMD_ADD,           // code
+        &neighbor,                   // neighbor 1 (priority = 1)
+        NULL,                  // neigbor 2 (priority = 2)
+        NUMCELLS_MSF,                // number cells
+        cellOptions,                 // cellOptions
+        NULL,                        // celllist to add
+        NULL,                        // celllist to delete (not used)
+        IANA_6TISCH_SFID_MSF,        // sfid
+        0,                           // list command offset (not used)
+        0                            // list command maximum celllist (not used)
+);
+
+// Three steps handshake: the receiver will decide about the cells to use
+#elif THREE_STEPS_HANDSHAKE
+   sixtop_request(
+           IANA_6TOP_CMD_ADD,           // code
+           &neighbor,                   // neighbor
+           NULL,                        // no second receiver
+           NUMCELLS_MSF,                // number cells
+           cellOptions,                 // cellOptions
+           NULL,                        // celllist to add
+           NULL,                        // celllist to delete (not used)
+           IANA_6TISCH_SFID_MSF,        // sfid
+           0,                           // list command offset (not used)
+           0                            // list command maximum celllist (not used)
+   );
+// MSF directly provides the list of cells
 #else
     cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
     
@@ -328,6 +366,7 @@ void msf_trigger6pAdd(void) {
     sixtop_request(
             IANA_6TOP_CMD_ADD,           // code
             &neighbor,                   // neighbor
+            NULL,                        // no second receiver
             NUMCELLS_MSF,                // number cells
             cellOptions,                 // cellOptions
             celllist_add,                // celllist to add
@@ -387,6 +426,7 @@ void msf_trigger6pDelete(void) {
     sixtop_request(
             IANA_6TOP_CMD_DELETE,   // code
             &neighbor,              // neighbor
+            NULL,                   // no second receiver
             NUMCELLS_MSF,           // number cells
             cellOptions,            // cellOptions
             NULL,                   // celllist to add (not used)
@@ -484,6 +524,7 @@ void msf_housekeeping(void) {
         sixtop_request(
                 IANA_6TOP_CMD_CLEAR,     // code
                 &nonParentNeighbor,      // neighbor
+                NULL,                    // no second receiver
                 NUMCELLS_MSF,            // number cells
                 CELLOPTIONS_MSF,         // cellOptions
                 NULL,                    // celllist to add (not used)
@@ -518,6 +559,7 @@ void msf_housekeeping(void) {
         sixtop_request(
                 IANA_6TOP_CMD_RELOCATE,  // code
                 &parentNeighbor,         // neighbor
+                NULL,                    // no second receiver
                 NUMCELLS_MSF,            // number cells
                 CELLOPTIONS_MSF,         // cellOptions
                 celllist_add,            // celllist to add

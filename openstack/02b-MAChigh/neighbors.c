@@ -556,6 +556,15 @@ void neighbors_setPreferredParent(uint8_t index, bool isPreferred) {
     neighbors_vars.neighbors[index].parentPreference = isPreferred;
 }
 
+void neighbors_setSecondPreferredParent(uint8_t index, bool isSecondPreferred) {
+
+   if (isSecondPreferred)
+      neighbors_vars.neighbors[index].parentPreference =  2;
+   else
+      neighbors_vars.neighbors[index].parentPreference =  isSecondPreferred;
+
+}
+
 //===== managing routing info
 
 /**

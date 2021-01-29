@@ -220,6 +220,16 @@ bool packetfunctions_sameAddress(open_addr_t *address_1, open_addr_t *address_2)
     return FALSE;
 }
 
+bool packetfunction_isNullAddress(open_addr_t *addr){
+   uint8_t i;
+   
+   for(i=0; i<sizeof(addr->addr_128b); i++)
+      if (addr->addr_128b[0] != 0)
+         return(FALSE);
+   return(TRUE);
+}
+
+
 //======= address read/write
 
 void packetfunctions_readAddress(uint8_t *payload, uint8_t type, open_addr_t *writeToAddress, bool littleEndian) {

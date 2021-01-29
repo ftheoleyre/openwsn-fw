@@ -159,6 +159,7 @@ void  sixtop_setSFcallback(
 owerror_t sixtop_request(
         uint8_t code,
         open_addr_t *neighbor,
+        open_addr_t *neighbor2,
         uint8_t numCells,
         uint8_t cellOptions,
         cellInfo_ht *celllist_toBeAdded,
@@ -196,6 +197,12 @@ owerror_t sixtop_request(
     pkt->creator = COMPONENT_SIXTOP_RES;
     pkt->owner = COMPONENT_SIXTOP_RES;
 
+    // saves the id of the second receiver
+    if (neighbor2 != NULL)
+       memcpy(&(sixtop_vars.neigbor_secondReceiver), neighbor2, sizeof(open_addr_t));
+    else
+       bzero(&(sixtop_vars.neigbor_secondReceiver), sizeof(open_addr_t));
+   
     memcpy(&(pkt->l2_nextORpreviousHop), neighbor, sizeof(open_addr_t));
     if (celllist_toBeDeleted != NULL) {
         memcpy(sixtop_vars.celllist_toDelete, celllist_toBeDeleted, CELLLIST_MAX_LEN * sizeof(cellInfo_ht));
@@ -206,10 +213,6 @@ owerror_t sixtop_request(
     if (code == IANA_6TOP_CMD_ADD || code == IANA_6TOP_CMD_DELETE || code == IANA_6TOP_CMD_RELOCATE) {
         // append 6p celllists
         if (code == IANA_6TOP_CMD_ADD || code == IANA_6TOP_CMD_RELOCATE) {
-           LOG_SUCCESS(COMPONENT_SIXTOP_RES,
-                     ERR_GENERIC,
-                     (errorparameter_t) 110,
-                     (errorparameter_t) numCells);
            
            //3-steps handshake -> that's to the other side to propose cells to add
            if(celllist_toBeAdded == NULL)
@@ -350,9 +353,8 @@ owerror_t sixtop_request(
     outcome = sixtop_send(pkt);
 
     if (outcome == E_SUCCESS) {
-       LOG_INFO(COMPONENT_SIXTOP, ERR_SIXTOP_REQUEST, (errorparameter_t) code, (errorparameter_t) 0);
-       LOG_INFO(COMPONENT_SIXTOP, ERR_GENERIC, (errorparameter_t) code, (errorparameter_t) neighbors_getSequenceNumber(neighbor));
-       
+        LOG_INFO(COMPONENT_SIXTOP, ERR_SIXTOP_REQUEST, (errorparameter_t) code, (errorparameter_t) 0);
+             
         //update states
         switch (code) {
             case IANA_6TOP_CMD_ADD:
@@ -908,15 +910,6 @@ void timer_sixtop_six2six_timeout_fired(void) {
 void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
     msg->owner = COMPONENT_SIXTOP_RES;
    
-
-   LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-           (errorparameter_t) 91,
-           (errorparameter_t) msg->l2_sixtop_cellOptions);
-   
-   LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-           (errorparameter_t) msg->l2_sixtop_messageType,
-           (errorparameter_t) error);
-
     // if this is a request send done
     if (msg->l2_sixtop_messageType == SIXTOP_CELL_REQUEST) {
       
@@ -1105,9 +1098,6 @@ port_INLINE bool sixtop_processIEs(OpenQueueEntry_t* pkt, uint16_t* lenIE) {
     ptr += 1;
     headerlen += 1;
    
-    LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC, (errorparameter_t) code, (errorparameter_t) temp_8b);
-   
-   
     // get 6p sfid
     sfid = *((uint8_t*)(pkt->payload)+ptr);
     ptr += 1;
@@ -1156,8 +1146,6 @@ void sixtop_six2six_notifyReceive(
    LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
         (errorparameter_t) 200,
         (errorparameter_t) length );
-   
-   
    
     if (type == SIXTOP_CELL_REQUEST) {
         // if this is a 6p request message
@@ -1260,11 +1248,6 @@ void sixtop_six2six_notifyReceive(
             cellOptions = *((uint8_t * )(pkt->payload) + ptr);
             ptr += 1;
             pktLen -= 1;
-           
-            LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                     (errorparameter_t) 15,
-                     (errorparameter_t) cellOptions);
-           
 
             // list command
             if (code == IANA_6TOP_CMD_LIST) {
@@ -1421,13 +1404,11 @@ void sixtop_six2six_notifyReceive(
                       cellOptions_transformed = cellOptions;
                   }
                   sixtop_vars.cellOptions = cellOptions_transformed;
+                  sixtop_vars.priority    = 1;
                   packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
                   *((uint8_t * )(response_pkt->payload)) = cellOptions_transformed;
                   response_pktLen += 1;
-                  LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                            (errorparameter_t) 100,
-                            (errorparameter_t) cellOptions_transformed);
-                              
+                  
                   // append 6p metadata
                   packetfunctions_reserveHeader(&response_pkt, sizeof(uint16_t));
                   response_pkt->payload[0] = (uint8_t)(sixtop_vars.cb_sf_getMetadata() & 0x00FF);
@@ -1442,18 +1423,74 @@ void sixtop_six2six_notifyReceive(
                   //change the sixtop state to wait for the reply (3rd step of the handshake)
                   // as if we were the initator of this 6P_ADD_CMD
                   sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_SENDDONE;
-                  
-                  //we have an on-going 3-steps transaction, but we are the 2nd step -> no need to register
-                  //memcpy(&(sixtop_vars.neighborOngoing3Steps), &(pkt->l2_nextORpreviousHop), sizeof(open_addr_t));
-                         
+                          
                   break;
                 }
-               // 2-steps handshake OR 3-steps handshake (2nd packet) -> the list of cells is directly in the 6P request
-               else {
+                //anycast negociation: I received the requets with the list (2nd action), and I must send the req to the second receiver (3rd action)
+                else if (
+                         (sixtop_vars.six2six_state == SIX_STATE_WAIT_WAITADDREQUEST)
+                         &&
+                         (packetfunction_isNullAddress(&(sixtop_vars.neigbor_secondReceiver)) == FALSE)
+                         ){
                   LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
                             (errorparameter_t) 13,
                             (errorparameter_t) pktLen);
                
+                  // Anycast negociation -> I must send a request (with the list) to the second receiver
+                  memcpy(&(response_pkt->l2_nextORpreviousHop), &(sixtop_vars.neigbor_secondReceiver), sizeof(open_addr_t));
+
+                  
+                  //insert the cells in the request
+                  uint8_t num = 0;
+                  for(i=0; i<CELLLIST_MAX_LEN; i++){
+                     if(response_pkt->l2_sixtop_celllist_add[i].isUsed){
+                        packetfunctions_reserveHeader(&response_pkt, 4);
+                        response_pkt->payload[0] = response_pkt->l2_sixtop_celllist_add[i].slotoffset & 0x00FF;
+                        response_pkt->payload[1] = (response_pkt->l2_sixtop_celllist_add[i].slotoffset & 0xFF00) >> 8;
+                        response_pkt->payload[2] = response_pkt->l2_sixtop_celllist_add[i].channeloffset & 0x00FF;
+                        response_pkt->payload[3] = (response_pkt->l2_sixtop_celllist_add[i].channeloffset & 0xFF00) >> 8;
+                        response_pktLen += 4;
+                        num++;
+                     }
+                  }
+                  
+                  // append 6p numberCells
+                  packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                  *((uint8_t * )(response_pkt->payload)) = numCells;
+                  response_pktLen += 1;
+                  
+                  // append 6p celloptions
+                  if ((cellOptions & (CELLOPTIONS_TX | CELLOPTIONS_RX)) != (CELLOPTIONS_TX | CELLOPTIONS_RX)) {
+                      cellOptions_transformed = cellOptions ^ (CELLOPTIONS_TX | CELLOPTIONS_RX);
+                  } else {
+                      cellOptions_transformed = cellOptions;
+                  }
+                  sixtop_vars.cellOptions = cellOptions_transformed;
+                  sixtop_vars.priority    = 1;
+                  packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                  *((uint8_t * )(response_pkt->payload)) = cellOptions_transformed;
+                  response_pktLen += 1;
+                              
+                  // append 6p metadata
+                  packetfunctions_reserveHeader(&response_pkt, sizeof(uint16_t));
+                  response_pkt->payload[0] = (uint8_t)(sixtop_vars.cb_sf_getMetadata() & 0x00FF);
+                  response_pkt->payload[1] = (uint8_t)((sixtop_vars.cb_sf_getMetadata() & 0xFF00) >> 8);
+                  response_pktLen += 2;
+                  
+
+                  //everything was correct
+                  returnCode = IANA_6TOP_CMD_ADD; //IANA_6TOP_RC_SUCCESS;
+                  response_type = IANA_6TOP_TYPE_REQUEST;  //3 steps: request / request / reply
+
+                  //change the sixtop state to wait for the reply (4th step of the anycast handshake)
+                  sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_ANYCAST_SENDDONE;
+                  break;
+               }
+               //Finalization: I must send the reply to the sender
+               else{
+                  LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
+                            (errorparameter_t) 15,
+                            (errorparameter_t) pktLen);
                   
                    if (sixtop_areAvailableCellsToBeScheduled(metadata, numCells, response_pkt->l2_sixtop_celllist_add)) {
                        for (i = 0; i < numCells; i++) {
@@ -1471,9 +1508,9 @@ void sixtop_six2six_notifyReceive(
                            }
                        }
                    }
+                  returnCode = IANA_6TOP_RC_SUCCESS;
+                  break;
                 }
-                returnCode = IANA_6TOP_RC_SUCCESS;
-                break;
             }
 
             // delete command
@@ -1598,11 +1635,7 @@ void sixtop_six2six_notifyReceive(
         } else {
             response_pkt->l2_sixtop_cellOptions = cellOptions;
         }
-       
-       LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                 (errorparameter_t) 16,
-                 (errorparameter_t) response_pkt->l2_sixtop_cellOptions);
-
+   
         // append 6p Seqnum
         packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
         *((uint8_t * )(response_pkt->payload)) = seqNum;
@@ -1623,11 +1656,6 @@ void sixtop_six2six_notifyReceive(
         *((uint8_t * )(response_pkt->payload)) = IANA_6TOP_6P_VERSION | response_type;
         //*((uint8_t * )(response_pkt->payload)) = IANA_6TOP_6P_VERSION | IANA_6TOP_TYPE_RESPONSE;
         response_pktLen += 1;
-       
-       LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
-                 (errorparameter_t) 33,
-                 (errorparameter_t) response_type);
-       
        
         // append 6p subtype id
         packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
@@ -1656,17 +1684,20 @@ void sixtop_six2six_notifyReceive(
     if (type == SIXTOP_CELL_RESPONSE) {
         // this is a 6p response message
 
-       LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
-               (errorparameter_t) 30,
-               (errorparameter_t) code );
-
-
         // if the code is SUCCESS
         if (code == IANA_6TOP_RC_SUCCESS || code == IANA_6TOP_RC_EOL) {
             switch (sixtop_vars.six2six_state) {
+                
+               
+               case SIX_STATE_WAIT_WAITADDREQUEST_ANYCAST :
+                    LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
+                          (errorparameter_t) 44,
+                          (errorparameter_t) 44 );
+                  break;
                   
                 case SIX_STATE_WAIT_ADDRESPONSE:       //2-steps handshake
                 case SIX_STATE_WAIT_WAITADDREQUEST :   //3-steps handshake
+               
 
                     // extract the list of cells from the response
                     i = 0;
@@ -1681,10 +1712,6 @@ void sixtop_six2six_notifyReceive(
                         pktLen -= 4;
                         i++;
                     }
-             
-                    LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
-                          (errorparameter_t) 51,
-                          (errorparameter_t) i);
             
                     sixtop_addCells(
                             sixtop_vars.cb_sf_getMetadata(),      // frame id
@@ -1861,21 +1888,6 @@ bool sixtop_addCells(
     for (i = 0; i < CELLLIST_MAX_LEN; i++) {
         if (cellList[i].isUsed) {
             hasCellsAdded = TRUE;
-           
-           LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                     12,
-                     12);
-           
-           LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                     cellList[i].slotoffset,
-                     cellList[i].channeloffset);
-           LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                     isShared,
-                     type);
-           LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                     temp_neighbor.addr_64b[6],
-                     temp_neighbor.addr_64b[7]);           
-           
             schedule_addActiveSlot(cellList[i].slotoffset, type, isShared, FALSE, cellList[i].channeloffset, priority, &temp_neighbor);
         }
     }

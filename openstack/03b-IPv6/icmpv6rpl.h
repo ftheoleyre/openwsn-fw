@@ -199,6 +199,8 @@ typedef struct {
     uint16_t rankIncrease;                    ///< the cost of the link to the parent, in units of rank
     bool haveParent;                          ///< this router has a route to DAG root
     uint8_t ParentIndex;                      ///< index of Parent in neighbor table (iff haveParent==TRUE)
+    bool haveSecondParent;                    ///< this router has a sedond route to DAG root
+    uint8_t SecondParentIndex;                ///< index of SecondParent in neighbor table (iff haveSecondParent==TRUE)
     // actually only here for debug
     icmpv6rpl_dio_ht *incomingDio;            ///< keep it global to be able to debug correctly.
     icmpv6rpl_pio_t *incomingPio;             ///< pio structure incoming
@@ -224,7 +226,11 @@ owerror_t icmpv6rpl_getRPLDODAGid(uint8_t *address_128b);
 
 bool icmpv6rpl_getPreferredParentIndex(uint8_t *indexptr);
 
+bool icmpv6rpl_getSecondPreferredParentIndex(uint8_t *indexptr);
+
 bool icmpv6rpl_getPreferredParentEui64(open_addr_t *addressToWrite);
+
+bool icmpv6rpl_getSecondPreferredParentEui64(open_addr_t *addressToWrite);
 
 void icmpv6rpl_updateNexthopAddress(open_addr_t *addressToWrite);
 

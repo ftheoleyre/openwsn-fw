@@ -10,11 +10,14 @@
 
 #include "opendefs.h"
 
+
 //=========================== define ==========================================
 
 //=========================== typedef =========================================
 
 //=========================== variables =======================================
+
+
 
 //=========================== prototypes ======================================
 
@@ -35,6 +38,8 @@ bool packetfunctions_isAllRoutersMulticast(open_addr_t *address);
 bool packetfunctions_isAllHostsMulticast(open_addr_t *address);
 
 bool packetfunctions_sameAddress(open_addr_t *address_1, open_addr_t *address_2);
+
+bool packetfunction_isNullAddress(open_addr_t *addr);
 
 bool packetfunctions_isLinkLocal(open_addr_t *address);
 

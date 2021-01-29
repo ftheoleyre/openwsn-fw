@@ -57,6 +57,7 @@ void icmpv6rpl_init(void) {
 
     //=== routing
     icmpv6rpl_vars.haveParent = FALSE;
+    icmpv6rpl_vars.haveSecondParent = FALSE;
     icmpv6rpl_vars.daoSent = FALSE;
 
     if (idmanager_getIsDAGroot() == TRUE) {
@@ -289,6 +290,7 @@ void icmpv6rpl_receive(OpenQueueEntry_t *msg) {
     openqueue_freePacketBuffer(msg);
 }
 
+
 /**
 \brief Retrieve this mote's parent index in neighbor table.
 
@@ -298,6 +300,17 @@ bool icmpv6rpl_getPreferredParentIndex(uint8_t *indexptr) {
     *indexptr = icmpv6rpl_vars.ParentIndex;
     return icmpv6rpl_vars.haveParent;
 }
+
+/**
+\brief Retrieve this mote's second parent index in neighbor table.
+
+\returns TRUE and index of second parent if have one, FALSE if no second parent
+*/
+bool icmpv6rpl_getSecondPreferredParentIndex(uint8_t *indexptr) {
+    *indexptr = icmpv6rpl_vars.SecondParentIndex;
+    return icmpv6rpl_vars.haveSecondParent;
+}
+
 
 /**
 \brief Retrieve my preferred parent's EUI64 address.
@@ -313,6 +326,23 @@ bool icmpv6rpl_getPreferredParentEui64(open_addr_t *addressToWrite) {
         return FALSE;
     }
 }
+
+
+/**
+\brief Retrieve my preferred second parent's EUI64 address.
+\param[out] addressToWrite Where to copy the second preferred parent's address to.
+*/
+bool icmpv6rpl_getSecondPreferredParentEui64(open_addr_t *addressToWrite) {
+    if (
+            icmpv6rpl_vars.haveSecondParent &&
+            neighbors_getNeighborNoResource(icmpv6rpl_vars.SecondParentIndex) == FALSE
+            ) {
+        return neighbors_getNeighborEui64(addressToWrite, ADDR_64B, icmpv6rpl_vars.SecondParentIndex);
+    } else {
+        return FALSE;
+    }
+}
+
 
 /**
 \brief Indicate whether some neighbor is the routing parent.
@@ -340,6 +370,35 @@ bool icmpv6rpl_isPreferredParent(open_addr_t *address) {
             return FALSE;
     }
 }
+
+
+/**
+\brief Indicate whether some neighbor is the routing second parent.
+
+\param[in] address The EUI64 address of the neighbor.
+
+\returns TRUE if that neighbor is second preferred parent, FALSE otherwise.
+*/
+bool icmpv6rpl_isSecondPreferredParent(open_addr_t *address) {
+    open_addr_t temp;
+    // do we currently have a parent?
+    if (icmpv6rpl_vars.haveSecondParent == FALSE) {
+        return FALSE;
+    }
+
+    //compare second parent address to the one presented.
+    switch (address->type) {
+        case ADDR_64B:
+            neighbors_getNeighborEui64(&temp, ADDR_64B, icmpv6rpl_vars.SecondParentIndex);
+            return packetfunctions_sameAddress(address, &temp);
+        default:
+            LOG_CRITICAL(COMPONENT_ICMPv6RPL, ERR_WRONG_ADDR_TYPE,
+                         (errorparameter_t) address->type,
+                         (errorparameter_t) 3);
+            return FALSE;
+    }
+}
+
 
 /**
 \brief Retrieve this mote's current DAG rank.
@@ -491,7 +550,71 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
         icmpv6rpl_vars.rankIncrease = prevRankIncrease;
         // no change to report on
     }
+   
+    //searches for a second preferred parent
+    // loop through neighbor table, update myDAGrank
+    tentativeDAGrank = MAXDAGRANK;
+    uint32_t myRank = icmpv6rpl_getMyDAGrank();
+    prevParentIndex = icmpv6rpl_vars.SecondParentIndex;
+    for (i = 0; i < MAXNUMNEIGHBORS; i++) {
+       if (neighbors_isStableNeighborByIndex(i)) { // in use and link is stable
+           // neighbor marked as NORES can't be parent
+          if (neighbors_getNeighborNoResource(i) == TRUE)
+               continue;
 
+          
+           LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                    (errorparameter_t) 11,
+                    (errorparameter_t) i);
+          
+          
+           // get this neighbor's advertized rank
+           neighborRank = neighbors_getNeighborRank(i);
+          
+           LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                   (errorparameter_t) neighborRank,
+                   (errorparameter_t) DEFAULTDAGRANK);
+          
+          LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                 (errorparameter_t) tentativeDAGrank,
+                 (errorparameter_t) icmpv6rpl_vars.ParentIndex);
+
+          LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                 (errorparameter_t) myRank,
+                 (errorparameter_t) 0);
+
+          
+           // if this neighbor has unknown/infinite rank, pass on it
+           if (neighborRank == DEFAULTDAGRANK)
+              continue;
+          
+           // second parent (to avoid any routing loop):   PreferredParent < XXX < MyRank
+           if (
+               (tentativeDAGrank == DEFAULTDAGRANK || tentativeDAGrank > neighborRank)
+               &&
+               (neighborRank > myRank)
+               &&
+               (i != icmpv6rpl_vars.ParentIndex)
+               ){
+              icmpv6rpl_vars.SecondParentIndex = i;
+           }
+       }
+    }
+    //we found a candidate
+    if (tentativeDAGrank != MAXDAGRANK){
+      icmpv6rpl_vars.haveSecondParent = TRUE;
+      neighbors_setSecondPreferredParent(prevParentIndex, FALSE);
+      // set neighbors as preferred parent
+      neighbors_setSecondPreferredParent(icmpv6rpl_vars.SecondParentIndex, 2);
+
+      LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                (errorparameter_t) 13,
+                (errorparameter_t) icmpv6rpl_vars.SecondParentIndex);
+    }
+
+   PB : tous les liens sont parfaits -> un dagroot (256), deux voisins (tous les 2 à 512 -> pas de choix possible)
+   SELECTIONNER A LA MAIN UNE TOPOLOGIE EN LIGNE??
+   
     // if my rank is reached to MAXDAGRANK
     if (icmpv6rpl_vars.myDAGrank == MAXDAGRANK) {
         icmpv6rpl_vars.lowestRankInHistory = MAXDAGRANK;

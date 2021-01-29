@@ -12,11 +12,18 @@
 #ifndef OPENWSN_OPENDEFS_H
 #define OPENWSN_OPENDEFS_H
 
+// anycast slot scheduling with the SF
+#define ANYCAST_SCHEDULING
+#ifdef ANYCAST_SCHEDULING
+   #define ANYCAST_LL
+#endif
+
 //activate a CCA before txing the ack
 #define ANYCAST_LL
 #ifdef ANYCAST_LL
    #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
 #endif
+
 
 
 // 3 steps or 2 steps handshake
