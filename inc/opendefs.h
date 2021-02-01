@@ -15,14 +15,15 @@
 // anycast slot scheduling with the SF
 #define ANYCAST_SCHEDULING
 #ifdef ANYCAST_SCHEDULING
-   #define ANYCAST_LL
+//   #define ANYCAST_LL
 #endif
 
+//TODO: CCA in python?
 //activate a CCA before txing the ack
-#define ANYCAST_LL
-#ifdef ANYCAST_LL
-   #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
-#endif
+//#define ANYCAST_LL
+//#ifdef ANYCAST_LL
+//   #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
+//#endif
 
 
 
@@ -308,11 +309,13 @@ enum {
    ERR_INVALID_PARAM                   = 0x53, // received an invalid parameter
    ERR_COPY_TO_SPKT                    = 0x54, // copy packet content to small packet (pkt len {} < max len {})
    ERR_COPY_TO_BPKT                    = 0x55, // copy packet content to big packet (pkt len {} > max len {})
+   ERR_GENERIC                         = 0x56, // generic feedback, val1={0}, val2={1}
+   ERR_BAD_CELLOPTIONS                 = 0x57, // Unknown cell option for a cell to add (celloption {0}, location {1})
 #ifdef CCA_BEFORE_ACK
-   ERR_WRONG_STATE_IN_CCAEND           = 0x56, // wrong state {0} in CCA_END, with CCA code result {1}
-   ERR_GENERIC                         = 0x57, // generic feedback, val1={0}, val2={1}
-   ERR_CCA_BUSY                        = 0x58, // The CCA before the ack forbids the tx (state {0})
-   ERR_BAD_CELLOPTIONS                 = 0x59, // Unknown cell option for a cell to add (celloption {0}, location {1})
+   ERR_WRONG_STATE_IN_CCAEND           = 0x58, // wrong state {0} in CCA_END, with CCA code result {1}
+   ERR_CCA_BUSY                        = 0x59, // The CCA before the ack forbids the tx (state {0})
+#endif
+#ifdef ANYCAST_SCHEDULING
    ERR_SECONDPARENT_CHANGE             = 0x60, // The nodes changes its preferred second parent (neighbor index {0} -> {1})
 #endif
 };

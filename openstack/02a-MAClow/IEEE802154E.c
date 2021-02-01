@@ -2196,7 +2196,8 @@ port_INLINE void activity_ri6(void) {
 #endif
 
    //the CCA denotes the medium is busy -> stops the ack
-   if(ieee154e_vars.CCAResult != CCA_IDLE){
+#ifdef CCA_BEFORE_ACK
+      if(ieee154e_vars.CCAResult != CCA_IDLE){
       LOG_ERROR(COMPONENT_IEEE802154E, ERR_CCA_BUSY,
                 (errorparameter_t) 2,
                 (errorparameter_t) ieee154e_vars.CCAResult);
@@ -2204,7 +2205,7 @@ port_INLINE void activity_ri6(void) {
       // abort
       //endSlot();
    }
-   
+#endif
 }
 
 port_INLINE void activity_rie4(void) {

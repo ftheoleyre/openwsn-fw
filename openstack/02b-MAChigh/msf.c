@@ -126,7 +126,7 @@ void msf_updateCellsElapsed(open_addr_t *neighbor, cellType_t type) {
         //we have a second parent, but no anycast cell
         uint8_t index;
         if (schedule_unicastCell_toSecondParent() && icmpv6rpl_getSecondPreferredParentIndex(&index)){
-           LOG_VERBOSE(COMPONENT_MSF, ERR_GENERIC, 11, 0);
+           LOG_SUCCESS(COMPONENT_MSF, ERR_GENERIC, 11, 0);
 
            msf_vars.needDeleteTx = TRUE;
            scheduler_push_task(msf_trigger6pDelete, TASKPRIO_MSF);
@@ -322,7 +322,7 @@ void msf_trigger6pAdd(void) {
 #ifdef ANYCAST_SCHEDULING 
    foundSecondParent = icmpv6rpl_getSecondPreferredParentEui64(&neighbor2);
    if (foundSecondParent){
-      LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC, 11,11);      
+      LOG_SUCCESS(COMPONENT_MSF, ERR_GENERIC, 11,11);      
       
       sixtop_request(
            IANA_6TOP_CMD_ADD,           // code
