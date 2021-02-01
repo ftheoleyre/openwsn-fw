@@ -111,7 +111,9 @@ typedef enum {
     CELLTYPE_OFF = 0,
     CELLTYPE_TX = 1,
     CELLTYPE_RX = 2,
-    CELLTYPE_TXRX = 3
+    CELLTYPE_TXRX = 3,
+   CELLTYPE_TX_ANYCAST = 4,
+   CELLTYPE_RX_ANYCAST = 5
 } cellType_t;
 
 typedef struct {
@@ -253,6 +255,8 @@ bool schedule_hasNonParentManagedTxCell(open_addr_t *neighbor);
 void schedule_hasNegotiatedTxCell(open_addr_t *address);
 
 bool schedule_hasNegotiatedTxCellToNonParent(open_addr_t *parentNeighbor, open_addr_t *nonParentNeighbor);
+
+bool schedule_hasUnicastTxCellsWithSecondParent(void);
 
 // from IEEE802154E
 void schedule_syncSlotOffset(slotOffset_t targetSlotOffset);

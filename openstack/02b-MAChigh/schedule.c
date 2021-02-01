@@ -886,6 +886,7 @@ bool schedule_hasNegotiatedTxCellToNonParent(open_addr_t *parentNeighbor, open_a
     return FALSE;
 }
 
+
 bool schedule_getAutonomousTxRxCellAnycast(uint16_t *slotoffset) {
     uint8_t i;
 
@@ -907,6 +908,39 @@ bool schedule_getAutonomousTxRxCellAnycast(uint16_t *slotoffset) {
     ENABLE_INTERRUPTS();
     return FALSE;
 }
+
+//returns True if some cells are in unicast while we have a second parent
+bool schedule_hasUnicastTxCellsWithSecondParent(void){
+   open_addr_t parent, secondParent;
+   uint8_t i;   
+   
+   //no second preferred parent
+   if (!icmpv6rpl_getSecondPreferredParentEui64(&secondParent))
+      return FALSE;
+   
+   //preferred parent
+   icmpv6rpl_getPreferredParentEui64(&parent);
+   
+   
+   INTERRUPT_DECLARATION();
+   DISABLE_INTERRUPTS();
+   
+   for (i = 0; i < MAXACTIVESLOTS; i++) {
+       if (
+               schedule_vars.scheduleBuf[i].type == CELLTYPE_TX &&
+               schedule_vars.scheduleBuf[i].shared == FALSE &&
+               packetfunctions_sameAddress(&(schedule_vars.scheduleBuf[i].neighbor), &parent)
+               ) {
+           ENABLE_INTERRUPTS();
+           return TRUE;
+       }
+   }
+   
+   
+   ENABLE_INTERRUPTS();
+   return FALSE;
+}
+
 
 //=== from IEEE802154E: reading the schedule and updating statistics
 

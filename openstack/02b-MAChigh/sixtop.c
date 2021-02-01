@@ -1143,7 +1143,7 @@ void sixtop_six2six_notifyReceive(
     cellInfo_ht celllist_list[CELLLIST_MAX_LEN];
     uint8_t response_type = IANA_6TOP_TYPE_RESPONSE;  //by default, we respond with a response
 
-   LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
+   LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
         (errorparameter_t) 200,
         (errorparameter_t) length );
    
@@ -1201,8 +1201,8 @@ void sixtop_six2six_notifyReceive(
                    &&
                    packetfunctions_sameAddress(&(sixtop_vars.neighborOngoing3Steps), &(pkt->l2_nextORpreviousHop))
                  )
-//   ICI YA UN PROBLEME -> le BON VOISIN N'EST PAS BINDE
-  //              ETAT SIX_STATE_WAIT_ADDRESPONSE
+// TODO::::  ICI YA UN PROBLEME -> le BON VOISIN N'EST PAS BINDE
+//              ETAT SIX_STATE_WAIT_ADDRESPONSE
                 
                 ) {
                
@@ -1426,12 +1426,13 @@ void sixtop_six2six_notifyReceive(
                           
                   break;
                 }
-                //anycast negociation: I received the requets with the list (2nd action), and I must send the req to the second receiver (3rd action)
+                //anycast negociation: I received the request with the list (2nd action), and I must send the req to the second receiver (3rd action)
                 else if (
                          (sixtop_vars.six2six_state == SIX_STATE_WAIT_WAITADDREQUEST)
                          &&
                          (packetfunction_isNullAddress(&(sixtop_vars.neigbor_secondReceiver)) == FALSE)
                          ){
+                   
                   LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
                             (errorparameter_t) 13,
                             (errorparameter_t) pktLen);
@@ -1819,7 +1820,7 @@ void sixtop_six2six_notifyReceive(
         }
 
         if (code == IANA_6TOP_RC_SUCCESS) {
-            LOG_SUCCESS(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
+           LOG_ERROR(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
                         (errorparameter_t)
             code,
                     (errorparameter_t)

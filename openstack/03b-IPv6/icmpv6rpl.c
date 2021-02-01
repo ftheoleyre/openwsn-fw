@@ -417,6 +417,7 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
     uint16_t previousDAGrank;
     uint16_t prevRankIncrease;
     uint8_t prevParentIndex;
+    uint8_t prevSecondParentIndex;
     bool prevHadParent;
     bool foundBetterParent;
     // temporaries
@@ -551,73 +552,96 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
         // no change to report on
     }
    
-    //searches for a second preferred parent
-    // loop through neighbor table, update myDAGrank
-    tentativeDAGrank = MAXDAGRANK;
-    uint32_t myRank = icmpv6rpl_getMyDAGrank();
-    prevParentIndex = icmpv6rpl_vars.SecondParentIndex;
-    for (i = 0; i < MAXNUMNEIGHBORS; i++) {
+   // if my rank is reached to MAXDAGRANK
+   if (icmpv6rpl_vars.myDAGrank == MAXDAGRANK) {
+       icmpv6rpl_vars.lowestRankInHistory = MAXDAGRANK;
+   }
+      
+   //no preferred parent -> a fortiori, no preferred second parent
+   if (!icmpv6rpl_vars.haveParent){
+      if (icmpv6rpl_vars.haveSecondParent)
+         neighbors_setSecondPreferredParent(icmpv6rpl_vars.SecondParentIndex, FALSE);
+      
+      
+      LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+             (errorparameter_t) 14,
+             (errorparameter_t) 14);
+      
+      return;
+   }
+   
+   //searches for a second preferred parent
+   // loop through neighbor table
+   prevSecondParentIndex = icmpv6rpl_vars.SecondParentIndex;
+   tentativeDAGrank = icmpv6rpl_getMyDAGrank();
+   for (i = 0; i < MAXNUMNEIGHBORS; i++) {
        if (neighbors_isStableNeighborByIndex(i)) { // in use and link is stable
            // neighbor marked as NORES can't be parent
           if (neighbors_getNeighborNoResource(i) == TRUE)
                continue;
-
-          
-           LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                    (errorparameter_t) 11,
-                    (errorparameter_t) i);
-          
           
            // get this neighbor's advertized rank
            neighborRank = neighbors_getNeighborRank(i);
           
-           LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                   (errorparameter_t) neighborRank,
-                   (errorparameter_t) DEFAULTDAGRANK);
-          
-          LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                 (errorparameter_t) tentativeDAGrank,
-                 (errorparameter_t) icmpv6rpl_vars.ParentIndex);
-
-          LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                 (errorparameter_t) myRank,
-                 (errorparameter_t) 0);
-
-          
            // if this neighbor has unknown/infinite rank, pass on it
            if (neighborRank == DEFAULTDAGRANK)
               continue;
-          
-           // second parent (to avoid any routing loop):   PreferredParent < XXX < MyRank
-           if (
-               (tentativeDAGrank == DEFAULTDAGRANK || tentativeDAGrank > neighborRank)
-               &&
-               (neighborRank > myRank)
-               &&
-               (i != icmpv6rpl_vars.ParentIndex)
-               ){
+         
+          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                   (errorparameter_t) 11,
+                   (errorparameter_t) i);
+
+          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                (errorparameter_t) tentativeDAGrank,
+                (errorparameter_t) neighborRank);
+
+          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                  (errorparameter_t) i,
+                  (errorparameter_t) icmpv6rpl_vars.ParentIndex);
+
+          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                 (errorparameter_t) (tentativeDAGrank > neighborRank),
+                 (errorparameter_t) (i != icmpv6rpl_vars.ParentIndex));
+
+
+          // second parent (to avoid any routing loop):   PreferredParent < XXX < MyRank
+          if ((tentativeDAGrank > neighborRank) && (i != icmpv6rpl_vars.ParentIndex)){
               icmpv6rpl_vars.SecondParentIndex = i;
-           }
+              tentativeDAGrank = neighborRank;
+             
+             LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
+                    (errorparameter_t) 13,
+                    (errorparameter_t) 13);
+
+          }
        }
     }
-    //we found a candidate
-    if (tentativeDAGrank != MAXDAGRANK){
-      icmpv6rpl_vars.haveSecondParent = TRUE;
-      neighbors_setSecondPreferredParent(prevParentIndex, FALSE);
-      // set neighbors as preferred parent
-      neighbors_setSecondPreferredParent(icmpv6rpl_vars.SecondParentIndex, 2);
-
-      LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                (errorparameter_t) 13,
-                (errorparameter_t) icmpv6rpl_vars.SecondParentIndex);
-    }
-
-   PB : tous les liens sont parfaits -> un dagroot (256), deux voisins (tous les 2 à 512 -> pas de choix possible)
-   SELECTIONNER A LA MAIN UNE TOPOLOGIE EN LIGNE??
    
-    // if my rank is reached to MAXDAGRANK
-    if (icmpv6rpl_vars.myDAGrank == MAXDAGRANK) {
-        icmpv6rpl_vars.lowestRankInHistory = MAXDAGRANK;
+    //we found a second preferred parent (< my rank AND not my parent)
+    if (tentativeDAGrank != icmpv6rpl_getMyDAGrank()){
+       //the second parent has changed
+       if (prevSecondParentIndex != icmpv6rpl_vars.SecondParentIndex){
+           
+          //remove the old one (if it existed)
+          if (icmpv6rpl_vars.haveSecondParent)
+             neighbors_setSecondPreferredParent(prevSecondParentIndex, FALSE);
+
+          icmpv6rpl_vars.haveSecondParent = TRUE;
+          neighbors_setSecondPreferredParent(icmpv6rpl_vars.SecondParentIndex, 2);
+
+          LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_SECONDPARENT_CHANGE,
+                   (errorparameter_t) prevSecondParentIndex,
+                   (errorparameter_t) icmpv6rpl_vars.SecondParentIndex);
+       }
+    }
+    // none found  and one existed
+    else if (icmpv6rpl_vars.haveSecondParent){
+       neighbors_setSecondPreferredParent(prevSecondParentIndex, FALSE);
+       icmpv6rpl_vars.haveSecondParent = TRUE;
+       
+       LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_SECONDPARENT_CHANGE,
+                (errorparameter_t) prevSecondParentIndex,
+                (errorparameter_t) -1);
     }
 }
 

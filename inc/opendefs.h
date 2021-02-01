@@ -313,6 +313,7 @@ enum {
    ERR_GENERIC                         = 0x57, // generic feedback, val1={0}, val2={1}
    ERR_CCA_BUSY                        = 0x58, // The CCA before the ack forbids the tx (state {0})
    ERR_BAD_CELLOPTIONS                 = 0x59, // Unknown cell option for a cell to add (celloption {0}, location {1})
+   ERR_SECONDPARENT_CHANGE             = 0x60, // The nodes changes its preferred second parent (neighbor index {0} -> {1})
 #endif
 };
 
