@@ -79,6 +79,7 @@ void sixtop_six2six_notifyReceive(
 
 //=== helper functions
 
+
 bool sixtop_addCells(
         uint8_t slotframeID,
         cellInfo_ht *cellList,
@@ -118,7 +119,7 @@ void sixtop_init(void) {
     sixtop_vars.dsn = 0;
     sixtop_vars.mgtTaskCounter = 0;
     sixtop_vars.kaPeriod = MAXKAPERIOD;
-    sixtop_vars.six2six_state = SIX_STATE_IDLE;
+    sixtop_setState(SIX_STATE_IDLE);
     memset(&sixtop_vars.neighborOngoing3Steps, 0, sizeof(open_addr_t));
 
     sixtop_vars.ebSendingTimerId = opentimers_create(TIMER_GENERAL_PURPOSE, TASKPRIO_SIXTOP);
@@ -180,6 +181,22 @@ owerror_t sixtop_request(
         // neighbor can't be none or previous transcation doesn't finish yet
         return E_FAIL;
     }
+   
+    if (neighbor2 == NULL)
+       openserial_printf("prepare a sixtop request to %x:%x (for %d cells)\n",
+                      neighbor->addr_64b[6],
+                      neighbor->addr_64b[7],
+                      numCells
+                      );
+    else
+       openserial_printf("prepare an anycast sixtop request to %x:%x (for %d cells), second parent %x:%x\n",
+                     neighbor->addr_64b[6],
+                     neighbor->addr_64b[7],
+                     numCells,
+                     neighbor2->addr_64b[6],
+                     neighbor2->addr_64b[7]
+                     );
+
 
     if (openqueue_getNum6PReq(neighbor) > 0) {
         // remove previous request as it's not sent out
@@ -358,27 +375,28 @@ owerror_t sixtop_request(
         //update states
         switch (code) {
             case IANA_6TOP_CMD_ADD:
-                sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_SENDDONE;
+                sixtop_setState(SIX_STATE_WAIT_ADDREQUEST_SENDDONE);
                 break;
             case IANA_6TOP_CMD_DELETE:
-                sixtop_vars.six2six_state = SIX_STATE_WAIT_DELETEREQUEST_SENDDONE;
+                sixtop_setState(SIX_STATE_WAIT_DELETEREQUEST_SENDDONE);
                 break;
             case IANA_6TOP_CMD_RELOCATE:
-                sixtop_vars.six2six_state = SIX_STATE_WAIT_RELOCATEREQUEST_SENDDONE;
+                sixtop_setState(SIX_STATE_WAIT_RELOCATEREQUEST_SENDDONE);
                 break;
             case IANA_6TOP_CMD_COUNT:
-                sixtop_vars.six2six_state = SIX_STATE_WAIT_COUNTREQUEST_SENDDONE;
+                sixtop_setState(SIX_STATE_WAIT_COUNTREQUEST_SENDDONE);
                 break;
             case IANA_6TOP_CMD_LIST:
-                sixtop_vars.six2six_state = SIX_STATE_WAIT_LISTREQUEST_SENDDONE;
+                sixtop_setState(SIX_STATE_WAIT_LISTREQUEST_SENDDONE);
                 break;
             case IANA_6TOP_CMD_CLEAR:
-                sixtop_vars.six2six_state = SIX_STATE_WAIT_CLEARREQUEST_SENDDONE;
+                sixtop_setState(SIX_STATE_WAIT_CLEARREQUEST_SENDDONE);
                 break;
         }
     } else {
         openqueue_freePacketBuffer(pkt);
     }
+    openserial_printf("Novel State %d, outcome %d\n", sixtop_vars.six2six_state, outcome);
     return outcome;
 }
 
@@ -394,12 +412,13 @@ owerror_t sixtop_send(OpenQueueEntry_t *msg) {
     msg->l2_securityLevel = IEEE802154_security_getSecurityLevel(msg);
     msg->l2_keyIdMode = IEEE802154_SECURITY_KEYIDMODE;
     msg->l2_keyIndex = IEEE802154_security_getDataKeyIndex();
-
+   
     if (msg->l2_payloadIEpresent == FALSE) {
         return sixtop_send_internal(msg, FALSE);
     } else {
         return sixtop_send_internal(msg, TRUE);
     }
+
 }
 
 //======= from lower layer
@@ -576,6 +595,8 @@ bool debugPrint_kaPeriod(void) {
 
 //=========================== private =========================================
 
+
+
 /**
 \brief Transfer packet to MAC.
 
@@ -632,6 +653,7 @@ owerror_t sixtop_send_internal(
                 msf_hashFunction_getSlotoffset(&(msg->l2_nextORpreviousHop)),    // slot offset
                 CELLTYPE_TX,                                                     // type of slot
                 TRUE,                                                            // shared?
+                FALSE,                                                           // anycast?
                 TRUE,                                                            // auto cell?
                 msf_hashFunction_getChanneloffset(&(msg->l2_nextORpreviousHop)), // channel offset
                 0,                                                               // default priority
@@ -903,13 +925,18 @@ void timer_sixtop_six2six_timeout_fired(void) {
     }
     // timeout timer fired, reset the state of sixtop to idle
     memset(&sixtop_vars.neighborOngoing3Steps, 0, sizeof(open_addr_t));
-    sixtop_vars.six2six_state = SIX_STATE_IDLE;
+    sixtop_setState(SIX_STATE_IDLE);
     opentimers_cancel(sixtop_vars.timeoutTimerId);
 }
 
 void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
     msg->owner = COMPONENT_SIXTOP_RES;
-   
+     
+    openserial_printf("packet sent to %x:%x, type %d\n",
+                      msg->l2_nextORpreviousHop.addr_64b[6],
+                      msg->l2_nextORpreviousHop.addr_64b[7],
+                      msg->l2_sixtop_messageType);
+
     // if this is a request send done
     if (msg->l2_sixtop_messageType == SIXTOP_CELL_REQUEST) {
       
@@ -918,13 +945,13 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
             switch (sixtop_vars.six2six_state) {
 
                 case SIX_STATE_WAIT_CLEARREQUEST_SENDDONE:
-                    sixtop_vars.six2six_state = SIX_STATE_WAIT_CLEARRESPONSE;
+                   sixtop_setState(SIX_STATE_WAIT_CLEARRESPONSE);
                     timer_sixtop_six2six_timeout_fired();
                     break;
                 default:
                     // reset handler and state if the request is failed to send out
                     memset(&sixtop_vars.neighborOngoing3Steps, 0, sizeof(open_addr_t));
-                    sixtop_vars.six2six_state = SIX_STATE_IDLE;
+                   sixtop_setState(SIX_STATE_IDLE);
                     break;
             }
         } else {
@@ -932,29 +959,30 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
             // the packet has been sent out successfully
             switch (sixtop_vars.six2six_state) {
                 case SIX_STATE_WAIT_ADDREQUEST_SENDDONE:
-                  
-                  //is it a 3 or 2-steps handshake?
-                    if (sixtop_vars.neighborOngoing3Steps.type != 0)
-                       sixtop_vars.six2six_state = SIX_STATE_WAIT_WAITADDREQUEST;
-                    else
-                       sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDRESPONSE;
-                    break;
+                   //first ADD_REQ for a 3-steps handshake
+                   if (packetfunctions_sameAddress(&(sixtop_vars.neighborOngoing3Steps),&(msg->l2_nextORpreviousHop)))
+                      sixtop_setState(SIX_STATE_WAIT_ADDREQUEST);
+                   else
+                     sixtop_setState(SIX_STATE_WAIT_ADDRESPONSE);
+                   break;
                 case SIX_STATE_WAIT_DELETEREQUEST_SENDDONE:
-                    sixtop_vars.six2six_state = SIX_STATE_WAIT_DELETERESPONSE;
+                    sixtop_setState(SIX_STATE_WAIT_DELETERESPONSE);
                     break;
                 case SIX_STATE_WAIT_RELOCATEREQUEST_SENDDONE:
-                    sixtop_vars.six2six_state = SIX_STATE_WAIT_RELOCATERESPONSE;
+                    sixtop_setState(SIX_STATE_WAIT_RELOCATERESPONSE);
                     break;
                 case SIX_STATE_WAIT_LISTREQUEST_SENDDONE:
-                    sixtop_vars.six2six_state = SIX_STATE_WAIT_LISTRESPONSE;
+                    sixtop_setState(SIX_STATE_WAIT_LISTRESPONSE);
                     break;
                 case SIX_STATE_WAIT_COUNTREQUEST_SENDDONE:
-                    sixtop_vars.six2six_state = SIX_STATE_WAIT_COUNTRESPONSE;
+                    sixtop_setState(SIX_STATE_WAIT_COUNTRESPONSE);
                     break;
                 case SIX_STATE_WAIT_CLEARREQUEST_SENDDONE:
-                    sixtop_vars.six2six_state = SIX_STATE_WAIT_CLEARRESPONSE;
+                    sixtop_setState(SIX_STATE_WAIT_CLEARRESPONSE);
                     break;
                 default:
+                    openserial_printf("Tx of a request while we are in state %d -> should never happen\n", sixtop_vars.six2six_state);
+                    sixtop_setState(SIX_STATE_IDLE);
                     // should never happen
                     break;
             }
@@ -969,30 +997,27 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
         }
     }
    
-  
-  
-   
-   
     // if this is a response send done
     if (msg->l2_sixtop_messageType == SIXTOP_CELL_RESPONSE) {
-        if (error == E_SUCCESS) {
-
-           
+        if (error == E_SUCCESS) {           
             neighbors_updateSequenceNumber(&(msg->l2_nextORpreviousHop));
             
+            openserial_printf("REP SENDONE, code %d, command %d\n", msg->l2_sixtop_returnCode, msg->l2_sixtop_command);
+           
+           
+           
+           
             // in case a response is sent out, check the return code
             if (msg->l2_sixtop_returnCode == IANA_6TOP_RC_SUCCESS) {
                if (msg->l2_sixtop_command == IANA_6TOP_CMD_ADD) {
-                    sixtop_addCells(
+                   sixtop_addCells(
                             msg->l2_sixtop_frameID,
                             msg->l2_sixtop_celllist_add,
                             &(msg->l2_nextORpreviousHop),
                             msg->l2_sixtop_cellOptions,
                             msg->l2_sixtop_priority
-                    );
-              
-                  if (sixtop_vars.six2six_state == SIX_STATE_WAIT_WAITADDREQUEST)
-                     sixtop_vars.six2six_state = SIX_STATE_IDLE;
+                   );
+                   sixtop_setState(SIX_STATE_IDLE);
                   
                }
                 if (msg->l2_sixtop_command == IANA_6TOP_CMD_DELETE) {
@@ -1143,11 +1168,15 @@ void sixtop_six2six_notifyReceive(
     cellInfo_ht celllist_list[CELLLIST_MAX_LEN];
     uint8_t response_type = IANA_6TOP_TYPE_RESPONSE;  //by default, we respond with a response
 
-   LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-        (errorparameter_t) 200,
-        (errorparameter_t) length );
+    openserial_printf("sixtop packet received from %x:%x, type %d, we are in state %d\n",
+                      pkt->l2_nextORpreviousHop.addr_64b[6],
+                      pkt->l2_nextORpreviousHop.addr_64b[7],
+                      type,
+                      sixtop_vars.six2six_state);
+
    
-    if (type == SIXTOP_CELL_REQUEST) {
+    //specific case: if I receive a reply in anycast from the second receiver -> I must send a reply to the first receiver
+    if (type == SIXTOP_CELL_REQUEST){
         // if this is a 6p request message
 
         // drop the packet if there are too many 6P response in the queue
@@ -1180,15 +1209,16 @@ void sixtop_six2six_notifyReceive(
                 returnCode = IANA_6TOP_RC_SFID_ERR;
                 break;
             }
+           
             // sequenceNumber check
             if (seqNum != neighbors_getSequenceNumber(&(pkt->l2_nextORpreviousHop)) && code != IANA_6TOP_CMD_CLEAR) {
                
-               LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                    (errorparameter_t) 70,
-                    (errorparameter_t) seqNum );
-               LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                    (errorparameter_t) code,
-                    (errorparameter_t) neighbors_getSequenceNumber(&(pkt->l2_nextORpreviousHop) ));
+                openserial_printf("Mismatch for the seqnum received from %x:%x (%d , expected %d)\n",
+                                  pkt->l2_nextORpreviousHop.addr_64b[6],
+                                  pkt->l2_nextORpreviousHop.addr_64b[7],
+                                  seqNum,
+                                  neighbors_getSequenceNumber(&(pkt->l2_nextORpreviousHop)));
+
 
                
                 returnCode = IANA_6TOP_RC_SEQNUM_ERR;
@@ -1197,26 +1227,18 @@ void sixtop_six2six_notifyReceive(
             // previous 6p transaction check
             if ((sixtop_vars.six2six_state != SIX_STATE_IDLE) &&
                 !(
-                  sixtop_vars.six2six_state == SIX_STATE_WAIT_WAITADDREQUEST
+                  sixtop_vars.six2six_state == SIX_STATE_WAIT_ADDREQUEST
                    &&
                    packetfunctions_sameAddress(&(sixtop_vars.neighborOngoing3Steps), &(pkt->l2_nextORpreviousHop))
                  )
-// TODO::::  ICI YA UN PROBLEME -> le BON VOISIN N'EST PAS BINDE
-//              ETAT SIX_STATE_WAIT_ADDRESPONSE
-                
                 ) {
                
-               LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                    (errorparameter_t) 10,
-                    (errorparameter_t) sixtop_vars.six2six_state );
+               openserial_printf("Incorrect State (%d) when the request is received (state, source and on-going @ follow)\n",
+                                 sixtop_vars.six2six_state,
+                                 pkt->l2_nextORpreviousHop.addr_64b,
+                                 sixtop_vars.neighborOngoing3Steps.addr_64b);
 
-               LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                    (errorparameter_t) pkt->l2_nextORpreviousHop.addr_64b[6],
-                    (errorparameter_t) pkt->l2_nextORpreviousHop.addr_64b[7] );
-               LOG_ERROR(COMPONENT_SIXTOP, ERR_GENERIC,
-                    (errorparameter_t) sixtop_vars.neighborOngoing3Steps.addr_64b[6],
-                    (errorparameter_t) sixtop_vars.neighborOngoing3Steps.addr_64b[7] );
-               
+                 
                
                
                 returnCode = IANA_6TOP_RC_RESET;
@@ -1230,7 +1252,7 @@ void sixtop_six2six_notifyReceive(
             }
 
             // commands check
-
+           
             // get metadata, metadata indicates frame id
             metadata = *((uint8_t * )(pkt->payload) + ptr);
             metadata |= *((uint8_t * )(pkt->payload) + ptr + 1) << 8;
@@ -1369,6 +1391,8 @@ void sixtop_six2six_notifyReceive(
          
                // 3-steps handshake (1st packet) -> respond with a list of cells
                if (i == 0){
+                  openserial_printf("Request received without list (1st packet of a 3-steps handshake)\n");
+                  
                   //asks MSF the list of cells
                   cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
                   if (msf_candidateAddCellList(celllist_add, NUMCELLS_MSF) == FALSE) {
@@ -1403,6 +1427,7 @@ void sixtop_six2six_notifyReceive(
                   } else {
                       cellOptions_transformed = cellOptions;
                   }
+              
                   sixtop_vars.cellOptions = cellOptions_transformed;
                   sixtop_vars.priority    = 1;
                   packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
@@ -1422,25 +1447,31 @@ void sixtop_six2six_notifyReceive(
 
                   //change the sixtop state to wait for the reply (3rd step of the handshake)
                   // as if we were the initator of this 6P_ADD_CMD
-                  sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_SENDDONE;
+                  sixtop_setState(SIX_STATE_WAIT_ADDREQUEST_SENDDONE);
                           
                   break;
                 }
                 //anycast negociation: I received the request with the list (2nd action), and I must send the req to the second receiver (3rd action)
                 else if (
-                         (sixtop_vars.six2six_state == SIX_STATE_WAIT_WAITADDREQUEST)
+                         (sixtop_vars.six2six_state == SIX_STATE_WAIT_ADDREQUEST)
                          &&
                          (packetfunction_isNullAddress(&(sixtop_vars.neigbor_secondReceiver)) == FALSE)
                          ){
                    
-                  LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
-                            (errorparameter_t) 13,
-                            (errorparameter_t) pktLen);
+                   openserial_printf("anycast negociation -> request with the list received from %d:%d, has now to negociate with %x:%x (ongoing %x:%x)\n",
+                                     response_pkt->l2_nextORpreviousHop.addr_64b[6],
+                                     response_pkt->l2_nextORpreviousHop.addr_64b[7],
+                                     sixtop_vars.neigbor_secondReceiver.addr_64b[6],
+                                     sixtop_vars.neigbor_secondReceiver.addr_64b[7],
+                                     sixtop_vars.neighborOngoing3Steps.addr_64b[6],
+                                     sixtop_vars.neighborOngoing3Steps.addr_64b[7]);
                
                   // Anycast negociation -> I must send a request (with the list) to the second receiver
                   memcpy(&(response_pkt->l2_nextORpreviousHop), &(sixtop_vars.neigbor_secondReceiver), sizeof(open_addr_t));
-
-                  
+                   
+                  //has to use the seqnum corresponding to the second receiver
+                  seqNum = neighbors_getSequenceNumber(&(sixtop_vars.neigbor_secondReceiver));
+    
                   //insert the cells in the request
                   uint8_t num = 0;
                   for(i=0; i<CELLLIST_MAX_LEN; i++){
@@ -1454,7 +1485,6 @@ void sixtop_six2six_notifyReceive(
                         num++;
                      }
                   }
-                  
                   // append 6p numberCells
                   packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
                   *((uint8_t * )(response_pkt->payload)) = numCells;
@@ -1484,14 +1514,12 @@ void sixtop_six2six_notifyReceive(
                   response_type = IANA_6TOP_TYPE_REQUEST;  //3 steps: request / request / reply
 
                   //change the sixtop state to wait for the reply (4th step of the anycast handshake)
-                  sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_ANYCAST_SENDDONE;
+                  sixtop_setState(SIX_STATE_WAIT_ADDREQUEST_SENDDONE);
                   break;
                }
                //Finalization: I must send the reply to the sender
                else{
-                  LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
-                            (errorparameter_t) 15,
-                            (errorparameter_t) pktLen);
+                   openserial_printf("Request with list -> rep to send\n");
                   
                    if (sixtop_areAvailableCellsToBeScheduled(metadata, numCells, response_pkt->l2_sixtop_celllist_add)) {
                        for (i = 0; i < numCells; i++) {
@@ -1616,6 +1644,8 @@ void sixtop_six2six_notifyReceive(
                             response_pkt->payload[3] = (uint8_t)(
                                     (response_pkt->l2_sixtop_celllist_add[i].channeloffset & 0xFF00) >> 8);
                             response_pktLen += 4;
+                           
+                           
                         }
                     }
                 }
@@ -1688,18 +1718,10 @@ void sixtop_six2six_notifyReceive(
         // if the code is SUCCESS
         if (code == IANA_6TOP_RC_SUCCESS || code == IANA_6TOP_RC_EOL) {
             switch (sixtop_vars.six2six_state) {
-                
-               
-               case SIX_STATE_WAIT_WAITADDREQUEST_ANYCAST :
-                    LOG_SUCCESS(COMPONENT_SIXTOP, ERR_GENERIC,
-                          (errorparameter_t) 44,
-                          (errorparameter_t) 44 );
-                  break;
                   
-                case SIX_STATE_WAIT_ADDRESPONSE:       //2-steps handshake
-                case SIX_STATE_WAIT_WAITADDREQUEST :   //3-steps handshake
-               
-
+                // a reply is coming
+                case SIX_STATE_WAIT_ADDRESPONSE:
+                
                     // extract the list of cells from the response
                     i = 0;
                     memset(pkt->l2_sixtop_celllist_add, 0, sizeof(pkt->l2_sixtop_celllist_add));
@@ -1713,15 +1735,127 @@ void sixtop_six2six_notifyReceive(
                         pktLen -= 4;
                         i++;
                     }
+                    numCells = i;
+                  
             
-                    sixtop_addCells(
+                    openserial_printf("rep received from %x:%x, ongoing %x:%x\n",
+                                      pkt->l2_nextORpreviousHop.addr_64b[6],
+                                      pkt->l2_nextORpreviousHop.addr_64b[7],
+                                      sixtop_vars.neighborOngoing3Steps.addr_64b[6],
+                                      sixtop_vars.neighborOngoing3Steps.addr_64b[7]
+                                       );
+                  
+                    //we need to send another reply in anycast before inserting the cells in the schedule
+                    if (
+                        (sixtop_vars.neighborOngoing3Steps.type != 0)
+                        &&
+                        !packetfunctions_sameAddress(&(sixtop_vars.neighborOngoing3Steps), &(pkt->l2_nextORpreviousHop))
+                        ){
+                       //sends now a "normal reply" to the first receiver with the complete list id
+                       openserial_printf("now generates the reply to %x:%x, with %d cell(s)\n",
+                                          sixtop_vars.neighborOngoing3Steps.addr_64b[6],
+                                          sixtop_vars.neighborOngoing3Steps.addr_64b[7],
+                                          numCells
+                                          );
+                       
+                       // get a free packet buffer
+                       response_pkt = openqueue_getFreePacketBuffer(COMPONENT_SIXTOP_RES);
+                       if (response_pkt == NULL) {
+                          LOG_ERROR(COMPONENT_SIXTOP_RES, ERR_NO_FREE_PACKET_BUFFER, (errorparameter_t) 0, (errorparameter_t) 0);
+                          return;
+                       }
+                       
+                       // take ownership
+                       response_pkt->creator = COMPONENT_SIXTOP_RES;
+                       response_pkt->owner = COMPONENT_SIXTOP_RES;
+                       
+                       memcpy(&(response_pkt->l2_nextORpreviousHop), &(sixtop_vars.neighborOngoing3Steps), sizeof(open_addr_t));
+                       memset(response_pkt->l2_sixtop_celllist_add, 0, sizeof(pkt->l2_sixtop_celllist_add));
+                       if (sixtop_areAvailableCellsToBeScheduled(0, numCells, pkt->l2_sixtop_celllist_add)) {
+                          for (i = 0; i < numCells; i++) {
+                             if (pkt->l2_sixtop_celllist_add[i].isUsed) {
+                                packetfunctions_reserveHeader(&response_pkt, 4);
+                                response_pkt->payload[0] = (uint8_t)(pkt->l2_sixtop_celllist_add[i].slotoffset & 0x00FF);
+                                response_pkt->payload[1] = (uint8_t)((pkt->l2_sixtop_celllist_add[i].slotoffset & 0xFF00) >> 8);
+                                response_pkt->payload[2] = (uint8_t)(pkt->l2_sixtop_celllist_add[i].channeloffset & 0x00FF);
+                                response_pkt->payload[3] = (uint8_t)((pkt->l2_sixtop_celllist_add[i].channeloffset & 0xFF00) >> 8);
+                                response_pktLen += 4;
+                                
+                                //copy the list to add them in my schedule if the response is correctly txed
+                                response_pkt->l2_sixtop_celllist_add[i].slotoffset = pkt->l2_sixtop_celllist_add[i].slotoffset;
+                                response_pkt->l2_sixtop_celllist_add[i].channeloffset = pkt->l2_sixtop_celllist_add[i].channeloffset;
+                                response_pkt->l2_sixtop_celllist_add[i].isUsed = TRUE;
+                                
+                                openserial_printf("%d / %d / %d\n",
+                                                  response_pkt->l2_sixtop_celllist_add[i].slotoffset,
+                                                  response_pkt->l2_sixtop_celllist_add[i].channeloffset,
+                                                  response_pkt->l2_sixtop_celllist_add[i].isUsed
+                                                  );
+                             }
+                          }
+                       }
+                       else
+                          openserial_printf("Problem: the cells are now available\n");
+                          
+                       // record code, returnCode, frameID and cellOptions. They will be used when 6p repsonse senddone
+                       response_pkt->l2_sixtop_command = IANA_6TOP_CMD_ADD;
+                       response_pkt->l2_sixtop_returnCode = IANA_6TOP_RC_SUCCESS;
+                       response_pkt->l2_sixtop_cellOptions = sixtop_vars.cellOptions;
+                       
+                       // append 6p Seqnum
+                       packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                       *((uint8_t * )(response_pkt->payload)) = neighbors_getSequenceNumber(&(sixtop_vars.neighborOngoing3Steps));
+                       response_pktLen += 1;
+                       
+                       // append 6p sfid
+                       packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                       *((uint8_t * )(response_pkt->payload)) = sixtop_vars.cb_sf_getsfid();
+                       response_pktLen += 1;
+                       
+                       // append 6p code
+                       packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                       *((uint8_t * )(response_pkt->payload)) = response_pkt->l2_sixtop_returnCode;
+                       response_pktLen += 1;
+                       
+                       // append 6p version, T(type) and  R(reserved)
+                       packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                       *((uint8_t * )(response_pkt->payload)) = IANA_6TOP_6P_VERSION | IANA_6TOP_TYPE_RESPONSE;
+                       response_pktLen += 1;
+                       
+                       // append 6p subtype id
+                       packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
+                       *((uint8_t * )(response_pkt->payload)) = IANA_6TOP_SUBIE_ID;
+                       response_pktLen += 1;
+                       
+                       // append IETF IE header (length_groupid_type)
+                       packetfunctions_reserveHeader(&response_pkt, sizeof(uint16_t));
+                       length_groupid_type = response_pktLen;
+                       length_groupid_type |= (IANA_IETF_IE_GROUP_ID | IANA_IETF_IE_TYPE);
+                       response_pkt->payload[0] = length_groupid_type & 0xFF;
+                       response_pkt->payload[1] = (length_groupid_type >> 8) & 0xFF;
+                       
+                       // indicate IEs present
+                       response_pkt->l2_payloadIEpresent = TRUE;
+                       
+                       // record this packet as sixtop request message
+                       response_pkt->l2_sixtop_messageType = SIXTOP_CELL_RESPONSE;
+                       
+                       //openqueue_freePacketBuffer(response_pkt);
+                       
+                       sixtop_send(response_pkt);
+                       //stops here the function -> we will finalize the handshake when the packet will be sent
+                       return;                       
+                    }
+                    else{
+                        sixtop_addCells(
                             sixtop_vars.cb_sf_getMetadata(),      // frame id
                             pkt->l2_sixtop_celllist_add,          // celllist to be added
                             &(pkt->l2_nextORpreviousHop),         // neighbor that cells to be added to
                             sixtop_vars.cellOptions,              // cell options
-                            sixtop_vars.priority
-                    );
-             
+                            sixtop_vars.priority);
+                    }
+                  
+                    // updates the seqnum with the tx in any case (seqnums are updated per link)
                     neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     
                   break;
@@ -1811,6 +1945,10 @@ void sixtop_six2six_notifyReceive(
                     neighbors_resetSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     break;
                 default:
+                  openserial_printf("sixtop response received after the timeout from %x:%x\n",
+                                    pkt->l2_nextORpreviousHop.addr_64b[6],
+                                    pkt->l2_nextORpreviousHop.addr_64b[7]);
+                  
                     // The sixtop response arrived after 6P TIMEOUT, or it's a duplicated response. Remove 6P request if I have.
                     openqueue_remove6PrequestToNeighbor(&(pkt->l2_nextORpreviousHop));
                     break;
@@ -1820,17 +1958,16 @@ void sixtop_six2six_notifyReceive(
         }
 
         if (code == IANA_6TOP_RC_SUCCESS) {
-           LOG_ERROR(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
-                        (errorparameter_t)
-            code,
-                    (errorparameter_t)
-            sixtop_vars.six2six_state);
+           LOG_SUCCESS(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
+                       (errorparameter_t)code,
+                       (errorparameter_t)
+                       sixtop_vars.six2six_state);
         } else if (code == IANA_6TOP_RC_EOL || code == IANA_6TOP_RC_BUSY || code == IANA_6TOP_RC_LOCKED) {
-            LOG_INFO(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
+           LOG_SUCCESS(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
                     (errorparameter_t) code,
                     (errorparameter_t) sixtop_vars.six2six_state);
         } else if (code == IANA_6TOP_RC_RESET){
-           LOG_INFO(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
+           LOG_SUCCESS(COMPONENT_SIXTOP, ERR_SIXTOP_RETURNCODE,
                    (errorparameter_t) code,
                    (errorparameter_t) sixtop_vars.six2six_state);
            
@@ -1842,12 +1979,31 @@ void sixtop_six2six_notifyReceive(
 
         memset(&sixtop_vars.neighborToClearCells, 0, sizeof(open_addr_t));
         memset(&sixtop_vars.neighborOngoing3Steps, 0, sizeof(open_addr_t));
-        sixtop_vars.six2six_state = SIX_STATE_IDLE;
+        sixtop_setState(SIX_STATE_IDLE);
         opentimers_cancel(sixtop_vars.timeoutTimerId);
     }
 }
 
+
 //======= helper functions
+
+
+/**
+\brief Changes the state in the FSM.
+
+This function changes the state in the Finite State Machine.
+A single place to change it for debuging.
+ 
+\param[in] state  The novel sixtop state
+
+*/
+void sixtop_setState(uint8_t state){
+   LOG_SUCCESS(COMPONENT_SIXTOP, ERR_SIXTOP_CHANGESTATE, sixtop_vars.six2six_state, state);
+   
+   sixtop_vars.six2six_state = state;
+}
+
+
 
 bool sixtop_addCells(
         uint8_t slotframeID,
@@ -1857,25 +2013,38 @@ bool sixtop_addCells(
         uint8_t priority
 ) {
     uint8_t i;
-    bool isShared;
+    bool isShared, isAnycast;
     open_addr_t temp_neighbor;
     cellType_t type;
     bool hasCellsAdded;
-
-   
    
     // translate cellOptions to cell type
     if (cellOptions == CELLOPTIONS_TX) {
         type = CELLTYPE_TX;
         isShared = FALSE;
+        isAnycast = FALSE;
     }
     else if (cellOptions == CELLOPTIONS_RX) {
         type = CELLTYPE_RX;
         isShared = FALSE;
+        isAnycast = FALSE;
+    }
+    else if (cellOptions == (CELLOPTIONS_TX | CELLOPTIONS_ANYCAST)){
+        openserial_printf("CELLTYPE_TX_ANYCAST\n");
+        type = CELLTYPE_TX;
+        isShared = FALSE;
+        isAnycast = TRUE;
+    }
+    else if (cellOptions == (CELLOPTIONS_RX | CELLOPTIONS_ANYCAST)){
+        openserial_printf("CELLTYPE_RX_ANYCAST\n");
+        type = CELLTYPE_RX;
+        isShared = FALSE;
+        isAnycast = TRUE;
     }
     else if (cellOptions == (CELLOPTIONS_TX | CELLOPTIONS_RX | CELLOPTIONS_SHARED)) {
         type = CELLTYPE_TXRX;
         isShared = TRUE;
+        isAnycast = FALSE;
     }
     else{
        LOG_ERROR(COMPONENT_SIXTOP, ERR_BAD_CELLOPTIONS, cellOptions, 2);
@@ -1884,12 +2053,14 @@ bool sixtop_addCells(
 
     memcpy(&temp_neighbor, previousHop, sizeof(open_addr_t));
 
+   openserial_printf("SCHEDULE, insertion of cells (timeslot / channel offset), type=%d, isShared=%d, isAnycast=%d:", type, isShared, isAnycast);
     hasCellsAdded = FALSE;
     // add cells to schedule
     for (i = 0; i < CELLLIST_MAX_LEN; i++) {
+        openserial_printf("%d: %d / %d", cellList[i].isUsed, cellList[i].slotoffset, cellList[i].channeloffset);
         if (cellList[i].isUsed) {
             hasCellsAdded = TRUE;
-            schedule_addActiveSlot(cellList[i].slotoffset, type, isShared, FALSE, cellList[i].channeloffset, priority, &temp_neighbor);
+            schedule_addActiveSlot(cellList[i].slotoffset, type, isShared, isAnycast, FALSE, cellList[i].channeloffset, priority, &temp_neighbor);
         }
     }
     return hasCellsAdded;

@@ -98,7 +98,8 @@ typedef enum {
     CELLOPTIONS_RX = 1 << 1,
     CELLOPTIONS_SHARED = 1 << 2,
     CELLOPTIONS_TIMEKEPPING = 1 << 3,
-    CELLOPTIONS_PRIORITY = 1 << 4
+    CELLOPTIONS_PRIORITY = 1 << 4,
+    CELLOPTIONS_ANYCAST = 1 << 5
 } linkOptions_t;
 
 //=========================== typedef =========================================
@@ -112,13 +113,14 @@ typedef enum {
     CELLTYPE_TX = 1,
     CELLTYPE_RX = 2,
     CELLTYPE_TXRX = 3,
-   CELLTYPE_TX_ANYCAST = 4,
-   CELLTYPE_RX_ANYCAST = 5
+//    CELLTYPE_TX_ANYCAST = 4,
+//    CELLTYPE_RX_ANYCAST = 5
 } cellType_t;
 
 typedef struct {
     cellType_t type;
     bool shared;
+    bool anycast;
     bool isAutoCell;
     uint8_t channelOffset;
     open_addr_t neighbor;
@@ -134,6 +136,7 @@ typedef struct {
     slotOffset_t slotOffset;
     cellType_t type;
     bool shared;
+    bool anycast;
     bool isAutoCell;
     uint8_t channelOffset;
     open_addr_t neighbor;
@@ -152,6 +155,7 @@ typedef struct {
     slotOffset_t slotOffset;
     uint8_t type;
     bool shared;
+    bool anycast;
     uint8_t channelOffset;
     open_addr_t neighbor;
     uint8_t numRx;
@@ -208,6 +212,7 @@ owerror_t schedule_addActiveSlot(
         slotOffset_t slotOffset,
         cellType_t type,
         bool shared,
+        bool anycast,
         bool isAutoCell,
         uint8_t channelOffset,
         uint8_t priority,
@@ -256,7 +261,7 @@ void schedule_hasNegotiatedTxCell(open_addr_t *address);
 
 bool schedule_hasNegotiatedTxCellToNonParent(open_addr_t *parentNeighbor, open_addr_t *nonParentNeighbor);
 
-bool schedule_hasUnicastTxCellsWithSecondParent(void);
+bool schedule_hasUnicastTxCellsWithSecondParent(open_addr_t *parentNeighbor);
 
 // from IEEE802154E
 void schedule_syncSlotOffset(slotOffset_t targetSlotOffset);

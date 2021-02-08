@@ -422,6 +422,8 @@ void neighbors_indicateTx(
 
 void neighbors_updateSequenceNumber(open_addr_t *address) {
     uint8_t i;
+   
+   
     for (i = 0; i < MAXNUMNEIGHBORS; i++) {
         if (packetfunctions_sameAddress(address, &neighbors_vars.neighbors[i].addr_64b)) {
             neighbors_vars.neighbors[i].sequenceNumber = (neighbors_vars.neighbors[i].sequenceNumber + 1) & 0xFF;
@@ -432,10 +434,16 @@ void neighbors_updateSequenceNumber(open_addr_t *address) {
             break;
         }
     }
+    openserial_printf("seqnum incremented to %d with %x:%x\n",
+                     neighbors_vars.neighbors[i].sequenceNumber,
+                     address->addr_64b[6],address->addr_64b[7]);
 }
 
 void neighbors_resetSequenceNumber(open_addr_t *address) {
     uint8_t i;
+   
+    openserial_printf("seqnum reset with %x:%x\n", address->addr_64b[6],address->addr_64b[7]);
+   
     for (i = 0; i < MAXNUMNEIGHBORS; i++) {
         if (packetfunctions_sameAddress(address, &neighbors_vars.neighbors[i].addr_64b)) {
             neighbors_vars.neighbors[i].sequenceNumber = 0;

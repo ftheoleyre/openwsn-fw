@@ -48,15 +48,21 @@ void uecho_handler(sock_udp_t *sock, sock_async_flags_t type, void *arg) {
         int16_t res;
 
         if ((res = sock_udp_recv(sock, buf, sizeof(buf), 0, &remote)) >= 0) {
-            openserial_printf("Received %d bytes from remote endpoint:\n", res);
-            openserial_printf(" - port: %d", remote.port);
-            openserial_printf(" - addr: ", remote.port);
-            for(int i=0; i < 16; i ++)
-                openserial_printf("%x ", remote.addr.ipv6[i]);
+           openserial_printf("Msg Received (%d bytes, from remote endpoint port:%d, addr: %x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x\n",
+                                 res,
+                                 remote.port,
+                                 remote.addr.ipv6[0],remote.addr.ipv6[1],
+                                 remote.addr.ipv6[2],remote.addr.ipv6[3],
+                                 remote.addr.ipv6[4],remote.addr.ipv6[5],
+                                 remote.addr.ipv6[6],remote.addr.ipv6[7],
+                                 remote.addr.ipv6[8],remote.addr.ipv6[9],
+                                 remote.addr.ipv6[10],remote.addr.ipv6[11],
+                                 remote.addr.ipv6[12],remote.addr.ipv6[13],
+                                 remote.addr.ipv6[14],remote.addr.ipv6[15]
+                              );
 
-            openserial_printf("\n\n");
-            openserial_printf("Msg received: %s\n\n", buf);
 
+ 
             if (sock_udp_send(sock, buf, res, &remote) < 0) {
                 openserial_printf("Error sending reply\n");
             }

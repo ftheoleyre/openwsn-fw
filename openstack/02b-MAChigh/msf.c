@@ -64,6 +64,7 @@ void msf_init(void) {
             msf_hashFunction_getSlotoffset(idmanager_getMyID(ADDR_64B)),     // slot offset
             CELLTYPE_RX,                                                     // type of slot
             FALSE,                                                           // shared?
+            FALSE,                                                           // anycast?
             TRUE,                                                            // auto cell?
             msf_hashFunction_getChanneloffset(idmanager_getMyID(ADDR_64B)),  // channel offset
             0,                                                               // default priority
@@ -84,7 +85,6 @@ void msf_init(void) {
 
 // called by schedule
 void msf_updateCellsElapsed(open_addr_t *neighbor, cellType_t type) {
-
 #if ADAPTIVE_MSF
     if (icmpv6rpl_isPreferredParent(neighbor) == FALSE) {
         return;
@@ -102,7 +102,6 @@ void msf_updateCellsElapsed(open_addr_t *neighbor, cellType_t type) {
             // not appliable
             return;
     }
-
     // adapt to upward traffic
     if (msf_vars.numCellsElapsed_tx == MAX_NUMCELLS) {
 
@@ -122,14 +121,6 @@ void msf_updateCellsElapsed(open_addr_t *neighbor, cellType_t type) {
         if (msf_vars.numCellsUsed_tx < LIM_NUMCELLSUSED_LOW) {
             msf_vars.needDeleteTx = TRUE;
             scheduler_push_task(msf_trigger6pDelete, TASKPRIO_MSF);
-        }
-        //we have a second parent, but no anycast cell
-        uint8_t index;
-        if (schedule_unicastCell_toSecondParent() && icmpv6rpl_getSecondPreferredParentIndex(&index)){
-           LOG_SUCCESS(COMPONENT_MSF, ERR_GENERIC, 11, 0);
-
-           msf_vars.needDeleteTx = TRUE;
-           scheduler_push_task(msf_trigger6pDelete, TASKPRIO_MSF);
         }
         msf_vars.numCellsElapsed_tx = 0;
         msf_vars.numCellsUsed_tx = 0;
@@ -321,15 +312,15 @@ void msf_trigger6pAdd(void) {
 // anycast scheduling: I will send a requrest to TWO receivers
 #ifdef ANYCAST_SCHEDULING 
    foundSecondParent = icmpv6rpl_getSecondPreferredParentEui64(&neighbor2);
+   
    if (foundSecondParent){
-      LOG_SUCCESS(COMPONENT_MSF, ERR_GENERIC, 11,11);      
-      
+       
       sixtop_request(
            IANA_6TOP_CMD_ADD,           // code
            &neighbor,                   // neighbor 1 (priority = 1)
            &neighbor2,                  // neigbor 2 (priority = 2)
            NUMCELLS_MSF,                // number cells
-           cellOptions,                 // cellOptions
+           CELLOPTIONS_ANYCAST | CELLOPTIONS_TX,      // cellOptions
            NULL,                        // celllist to add
            NULL,                        // celllist to delete (not used)
            IANA_6TISCH_SFID_MSF,        // sfid
@@ -337,20 +328,32 @@ void msf_trigger6pAdd(void) {
            0                            // list command maximum celllist (not used)
    );
    }
-   else
-      sixtop_request(
-        IANA_6TOP_CMD_ADD,           // code
-        &neighbor,                   // neighbor 1 (priority = 1)
-        NULL,                  // neigbor 2 (priority = 2)
-        NUMCELLS_MSF,                // number cells
-        cellOptions,                 // cellOptions
-        NULL,                        // celllist to add
-        NULL,                        // celllist to delete (not used)
-        IANA_6TISCH_SFID_MSF,        // sfid
-        0,                           // list command offset (not used)
-        0                            // list command maximum celllist (not used)
-);
+   else{
+      
+      cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
+      
+      if (msf_candidateAddCellList(celllist_add, NUMCELLS_MSF) == FALSE) {
+          openserial_printf("failed to get the list of cells to add\n");
+         
+          // failed to get cell list to add
+          return;
+      }
 
+      sixtop_request(
+              IANA_6TOP_CMD_ADD,           // code
+              &neighbor,                   // neighbor
+              NULL,                        // no second receiver
+              NUMCELLS_MSF,                // number cells
+              cellOptions,                 // cellOptions
+              celllist_add,                // celllist to add
+              NULL,                        // celllist to delete (not used)
+              IANA_6TISCH_SFID_MSF,        // sfid
+              0,                           // list command offset (not used)
+              0                            // list command maximum celllist (not used)
+      );
+
+   }
+ 
 // Three steps handshake: the receiver will decide about the cells to use
 #elif THREE_STEPS_HANDSHAKE
    sixtop_request(
@@ -546,6 +549,31 @@ void msf_housekeeping(void) {
         );
         return;
     }
+   
+#ifdef ANYCAST_SCHEDULING
+   
+    //anycast tx to parent(s) -> we have a second parent, but no anycast cell
+    if (schedule_hasUnicastTxCellsWithSecondParent(&parentNeighbor)){
+       
+       // send a clear request to the this parent neighbor, to renegociate anycast cells
+
+       sixtop_request(
+               IANA_6TOP_CMD_CLEAR,     // code
+               &parentNeighbor,         // neighbor
+               NULL,                    // no second receiver
+               NUMCELLS_MSF,            // number cells
+               CELLOPTIONS_MSF,         // cellOptions
+               NULL,                    // celllist to add (not used)
+               NULL,                    // celllist to delete (not used)
+               IANA_6TISCH_SFID_MSF,    // sfid
+               0,                       // list command offset (not used)
+               0                        // list command maximum celllist (not used)
+       );
+       return;
+    }
+#endif
+   
+   
 
     if (schedule_getNumberOfNegotiatedCells(&parentNeighbor, CELLTYPE_TX) == 0) {
         msf_vars.needAddTx = TRUE;

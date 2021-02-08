@@ -79,6 +79,7 @@ void schedule_startDAGroot(void) {
                 running_slotOffset,                     // slot offset
                 CELLTYPE_TXRX,                          // type of slot
                 TRUE,                                   // shared?
+                FALSE,                                  // anycast?
                 FALSE,                                  // auto cell?
                 SCHEDULE_MINIMAL_6TISCH_CHANNELOFFSET,  // channel offset
                 0,                                      // default priority
@@ -106,6 +107,7 @@ bool debugPrint_schedule(void) {
     temp.slotOffset = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].slotOffset;
     temp.type = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].type;
     temp.shared = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].shared;
+    temp.anycast = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].anycast;
     temp.channelOffset = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].channelOffset;
 
     memcpy(&temp.neighbor, &schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].neighbor, sizeof(open_addr_t));
@@ -242,6 +244,7 @@ owerror_t schedule_addActiveSlot(
         slotOffset_t slotOffset,
         cellType_t type,
         bool shared,
+        bool anycast,
         bool isAutoCell,
         channelOffset_t channelOffset,
         uint8_t priority,
@@ -324,6 +327,7 @@ owerror_t schedule_addActiveSlot(
             // backup current entries
             backupEntry->type = slotContainer->type;
             backupEntry->shared = slotContainer->shared;
+            backupEntry->anycast = slotContainer->anycast;
             backupEntry->channelOffset = slotContainer->channelOffset;
             backupEntry->isAutoCell = slotContainer->isAutoCell;
             backupEntry->priority = slotContainer->priority;
@@ -341,6 +345,7 @@ owerror_t schedule_addActiveSlot(
             // add cell to schedule
             slotContainer->type = type;
             slotContainer->shared = shared;
+            slotContainer->anycast = anycast;
             slotContainer->channelOffset = channelOffset;
             slotContainer->isAutoCell = isAutoCell;
             slotContainer->priority = priority;
@@ -356,6 +361,7 @@ owerror_t schedule_addActiveSlot(
 
             backupEntry->type = type;
             backupEntry->shared = shared;
+            backupEntry->anycast = anycast;
             backupEntry->channelOffset = channelOffset;
             backupEntry->isAutoCell = isAutoCell;
             backupEntry->priority = priority;
@@ -378,6 +384,7 @@ owerror_t schedule_addActiveSlot(
     slotContainer->slotOffset = slotOffset;
     slotContainer->type = type;
     slotContainer->shared = shared;
+    slotContainer->anycast = anycast;
     slotContainer->channelOffset = channelOffset;
     slotContainer->isAutoCell = isAutoCell;
     slotContainer->priority = priority;
@@ -432,6 +439,7 @@ owerror_t schedule_addActiveSlot(
                 slotContainer->slotOffset = 0;
                 slotContainer->type = CELLTYPE_OFF;
                 slotContainer->shared = FALSE;
+                slotContainer->anycast = FALSE;
                 slotContainer->channelOffset = 0;
                 memset(&slotContainer->neighbor, 0, sizeof(open_addr_t));
                 ENABLE_INTERRUPTS();
@@ -512,6 +520,7 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
         // reset the backup entry
         backupEntry->type = CELLTYPE_OFF;
         backupEntry->shared = FALSE;
+        backupEntry->anycast = FALSE;
         backupEntry->channelOffset = 0;
 
         backupEntry->neighbor.type = ADDR_NONE;
@@ -544,6 +553,7 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
             // move the backup entry to the schedule
             slotContainer->type = slotContainer->backupEntries[candidate_index].type;
             slotContainer->shared = slotContainer->backupEntries[candidate_index].shared;
+            slotContainer->anycast = slotContainer->backupEntries[candidate_index].anycast;
             slotContainer->channelOffset = slotContainer->backupEntries[candidate_index].channelOffset;
             slotContainer->isAutoCell = slotContainer->backupEntries[candidate_index].isAutoCell;
             slotContainer->priority = slotContainer->backupEntries[candidate_index].priority;
@@ -640,6 +650,8 @@ bool schedule_isSlotOffsetAvailable(uint16_t slotOffset) {
 void schedule_removeAllNegotiatedCellsToNeighbor(uint8_t slotframeID, open_addr_t *neighbor) {
     uint8_t i;
 
+   openserial_printf("I remove all the cells with %x:%x after a CLEAR command\n", neighbor->addr_64b[6], neighbor->addr_64b[7]);
+   
     // remove all entries in schedule with previousHop address
     for (i = 0; i < MAXACTIVESLOTS; i++) {
         if (
@@ -909,9 +921,9 @@ bool schedule_getAutonomousTxRxCellAnycast(uint16_t *slotoffset) {
     return FALSE;
 }
 
-//returns True if some cells are in unicast while we have a second parent
-bool schedule_hasUnicastTxCellsWithSecondParent(void){
-   open_addr_t parent, secondParent;
+//returns True if some cells are not in anycast (=unicast) with my parent while we have a second parent
+bool schedule_hasUnicastTxCellsWithSecondParent(open_addr_t *parent){
+   open_addr_t secondParent;
    uint8_t i;   
    
    //no second preferred parent
@@ -919,8 +931,7 @@ bool schedule_hasUnicastTxCellsWithSecondParent(void){
       return FALSE;
    
    //preferred parent
-   icmpv6rpl_getPreferredParentEui64(&parent);
-   
+   icmpv6rpl_getPreferredParentEui64(parent);
    
    INTERRUPT_DECLARATION();
    DISABLE_INTERRUPTS();
@@ -929,7 +940,8 @@ bool schedule_hasUnicastTxCellsWithSecondParent(void){
        if (
                schedule_vars.scheduleBuf[i].type == CELLTYPE_TX &&
                schedule_vars.scheduleBuf[i].shared == FALSE &&
-               packetfunctions_sameAddress(&(schedule_vars.scheduleBuf[i].neighbor), &parent)
+               packetfunctions_sameAddress(&(schedule_vars.scheduleBuf[i].neighbor), parent) &&
+               schedule_vars.scheduleBuf[i].anycast == FALSE
                ) {
            ENABLE_INTERRUPTS();
            return TRUE;

@@ -311,12 +311,13 @@ enum {
    ERR_COPY_TO_BPKT                    = 0x55, // copy packet content to big packet (pkt len {} > max len {})
    ERR_GENERIC                         = 0x56, // generic feedback, val1={0}, val2={1}
    ERR_BAD_CELLOPTIONS                 = 0x57, // Unknown cell option for a cell to add (celloption {0}, location {1})
+   ERR_SIXTOP_CHANGESTATE              = 0x58, // sixtop FSM change its state {0} -> {1}
 #ifdef CCA_BEFORE_ACK
-   ERR_WRONG_STATE_IN_CCAEND           = 0x58, // wrong state {0} in CCA_END, with CCA code result {1}
-   ERR_CCA_BUSY                        = 0x59, // The CCA before the ack forbids the tx (state {0})
+   ERR_WRONG_STATE_IN_CCAEND           = 0x59, // wrong state {0} in CCA_END, with CCA code result {1}
+   ERR_CCA_BUSY                        = 0x60, // The CCA before the ack forbids the tx (state {0})
 #endif
 #ifdef ANYCAST_SCHEDULING
-   ERR_SECONDPARENT_CHANGE             = 0x60, // The nodes changes its preferred second parent (neighbor index {0} -> {1})
+   ERR_SECONDPARENT_CHANGE             = 0x61, // The nodes changes its preferred second parent (neighbor index {0} -> {1})
 #endif
 };
 

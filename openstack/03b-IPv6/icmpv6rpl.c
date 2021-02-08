@@ -423,7 +423,7 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
     // temporaries
     uint16_t rankIncrease;
     dagrank_t neighborRank;
-    uint32_t tentativeDAGrank;
+    dagrank_t tentativeDAGrank;
 
     open_addr_t newParent;
 
@@ -500,6 +500,18 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
             }
             // remember that we have at least one valid candidate parent
             foundBetterParent = TRUE;
+           
+            open_addr_t addr_tmpp;
+            neighbors_getNeighborEui64(&addr_tmpp, ADDR_64B, i);
+           
+            openserial_printf("Novel candidate: %x:%x, rank = %d + %d, myrank %d ",
+                              addr_tmpp.addr_64b[6],
+                              addr_tmpp.addr_64b[7],
+                              neighborRank,
+                              rankIncrease,
+                              icmpv6rpl_vars.myDAGrank);
+           
+           
             // select best candidate so far
             if (icmpv6rpl_vars.myDAGrank > tentativeDAGrank) {
                 if (tentativeDAGrank < icmpv6rpl_vars.lowestRankInHistory) {
@@ -561,12 +573,7 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
    if (!icmpv6rpl_vars.haveParent){
       if (icmpv6rpl_vars.haveSecondParent)
          neighbors_setSecondPreferredParent(icmpv6rpl_vars.SecondParentIndex, FALSE);
-      
-      
-      LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-             (errorparameter_t) 14,
-             (errorparameter_t) 14);
-      
+       
       return;
    }
    
@@ -586,41 +593,35 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
            // if this neighbor has unknown/infinite rank, pass on it
            if (neighborRank == DEFAULTDAGRANK)
               continue;
+       
+           open_addr_t addr_tmp;
+           neighbors_getNeighborEui64(&addr_tmp, ADDR_64B, i);
+           /*
+            openserial_printf("candidate %x%x (its rank %d), best rank %d, my rank %d, parent position %d, conditions: %d AND %d, has parent %d\n",
+                             addr_tmp.addr_64b[6],
+                             addr_tmp.addr_64b[7],
+                             neighborRank,
+                             tentativeDAGrank,
+                             icmpv6rpl_vars.myDAGrank,
+                             icmpv6rpl_vars.ParentIndex,
+                             (uint32_t)tentativeDAGrank > (uint32_t)neighborRank,
+                             i != icmpv6rpl_vars.ParentIndex,
+                             icmpv6rpl_vars.haveParent);
+             */
          
-          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                   (errorparameter_t) 11,
-                   (errorparameter_t) i);
-
-          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                (errorparameter_t) tentativeDAGrank,
-                (errorparameter_t) neighborRank);
-
-          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                  (errorparameter_t) i,
-                  (errorparameter_t) icmpv6rpl_vars.ParentIndex);
-
-          LOG_ERROR(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                 (errorparameter_t) (tentativeDAGrank > neighborRank),
-                 (errorparameter_t) (i != icmpv6rpl_vars.ParentIndex));
-
-
           // second parent (to avoid any routing loop):   PreferredParent < XXX < MyRank
-          if ((tentativeDAGrank > neighborRank) && (i != icmpv6rpl_vars.ParentIndex)){
+          if (((uint32_t)tentativeDAGrank > (uint32_t)neighborRank) && (i != icmpv6rpl_vars.ParentIndex)){
               icmpv6rpl_vars.SecondParentIndex = i;
               tentativeDAGrank = neighborRank;
-             
-             LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_GENERIC,
-                    (errorparameter_t) 13,
-                    (errorparameter_t) 13);
-
           }
        }
     }
    
     //we found a second preferred parent (< my rank AND not my parent)
     if (tentativeDAGrank != icmpv6rpl_getMyDAGrank()){
+      
        //the second parent has changed
-       if (prevSecondParentIndex != icmpv6rpl_vars.SecondParentIndex){
+       if (!icmpv6rpl_vars.haveSecondParent || prevSecondParentIndex != icmpv6rpl_vars.SecondParentIndex){
            
           //remove the old one (if it existed)
           if (icmpv6rpl_vars.haveSecondParent)

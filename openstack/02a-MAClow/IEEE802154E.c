@@ -1083,9 +1083,9 @@ port_INLINE void activity_ti1ORri1(void) {
                         // update numCellElapsed and numCellUsed on managed Tx cell
                         if (ieee154e_vars.dataToSend != NULL) {
                             ieee154e_vars.dataToSend->l2_sendOnTxCell = TRUE;
-                            msf_updateCellsUsed(&neighbor, CELLTYPE_TX);
+                            msf_updateCellsUsed(&neighbor, cellType);
                         }
-                        msf_updateCellsElapsed(&neighbor, CELLTYPE_TX);
+                        msf_updateCellsElapsed(&neighbor, cellType);
                     }
                 } else {
                     // this is minimal cell
@@ -1168,7 +1168,7 @@ port_INLINE void activity_ti1ORri1(void) {
 #endif
                 break;
             }
-        case CELLTYPE_RX:
+       case CELLTYPE_RX:
             // change state
             changeState(S_RXDATAOFFSET);
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
@@ -2606,6 +2606,7 @@ bool isValidEbFormat(OpenQueueEntry_t *pkt, uint16_t *lenIE) {
                                     slotoffset,    // slot offset
                                     CELLTYPE_TXRX, // type of slot
                                     TRUE,          // shared?
+                                    FALSE,         // anycast?
                                     FALSE,         // auto cell
                                     channeloffset, // channel offset
                                     0,             // default priority
