@@ -83,7 +83,8 @@ void schedule_startDAGroot(void) {
                 FALSE,                                  // auto cell?
                 SCHEDULE_MINIMAL_6TISCH_CHANNELOFFSET,  // channel offset
                 0,                                      // default priority
-                &temp_neighbor                          // neighbor
+                &temp_neighbor,                         // neighbor
+                &temp_neighbor                          // neighbor2
         );
     }
 }
@@ -111,7 +112,8 @@ bool debugPrint_schedule(void) {
     temp.channelOffset = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].channelOffset;
 
     memcpy(&temp.neighbor, &schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].neighbor, sizeof(open_addr_t));
-
+    memcpy(&temp.neighbor2, &schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].neighbor2, sizeof(open_addr_t));
+   
     temp.numRx = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].numRx;
     temp.numTx = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].numTx;
     temp.numTxACK = schedule_vars.scheduleBuf[schedule_vars.debugPrintRow].numTxACK;
@@ -217,6 +219,7 @@ void schedule_getSlotInfo(slotOffset_t slotOffset, slotinfo_element_t *info) {
             info->isAutoCell = slotContainer->isAutoCell;
             info->priority = slotContainer->priority;
             memcpy(&(info->address), &(slotContainer->neighbor), sizeof(open_addr_t));
+            memcpy(&(info->address), &(slotContainer->neighbor2), sizeof(open_addr_t));
             return; //as this is an update. No need to re-insert as it is in the same position on the list.
         }
         slotContainer++;
@@ -238,6 +241,7 @@ void schedule_getSlotInfo(slotOffset_t slotOffset, slotinfo_element_t *info) {
 \param shared           Whether this cell is shared (TRUE) or not (FALSE).
 \param channelOffset    The channelOffset of the new slot
 \param neighbor         The neighbor associated with this cell (all 0's if
+\param neighbor 2        The second neighbor associated with this cell (all 0's if
    none)
 */
 owerror_t schedule_addActiveSlot(
@@ -248,7 +252,8 @@ owerror_t schedule_addActiveSlot(
         bool isAutoCell,
         channelOffset_t channelOffset,
         uint8_t priority,
-        open_addr_t *neighbor
+        open_addr_t *neighbor,
+        open_addr_t *neighbor2
 ) {
     uint8_t asn[5];
     scheduleEntry_t *slotContainer;
@@ -333,6 +338,7 @@ owerror_t schedule_addActiveSlot(
             backupEntry->priority = slotContainer->priority;
 
             memcpy(&(backupEntry->neighbor), &(slotContainer->neighbor), sizeof(open_addr_t));
+            memcpy(&(backupEntry->neighbor2), &(slotContainer->neighbor2), sizeof(open_addr_t));
 
             backupEntry->numRx = slotContainer->numRx;
             backupEntry->numTx = slotContainer->numTx;
@@ -350,6 +356,7 @@ owerror_t schedule_addActiveSlot(
             slotContainer->isAutoCell = isAutoCell;
             slotContainer->priority = priority;
             memcpy(&(slotContainer->neighbor), neighbor, sizeof(open_addr_t));
+            memcpy(&(slotContainer->neighbor2), neighbor2, sizeof(open_addr_t));
 
             // fill that schedule entry with current asn
             ieee154e_getAsn(&(asn[0]));
@@ -366,6 +373,7 @@ owerror_t schedule_addActiveSlot(
             backupEntry->isAutoCell = isAutoCell;
             backupEntry->priority = priority;
             memcpy(&backupEntry->neighbor, neighbor, sizeof(open_addr_t));
+            memcpy(&backupEntry->neighbor2, neighbor2, sizeof(open_addr_t));
 
             // fill that schedule entry with current asn
             ieee154e_getAsn(&(asn[0]));
@@ -389,6 +397,7 @@ owerror_t schedule_addActiveSlot(
     slotContainer->isAutoCell = isAutoCell;
     slotContainer->priority = priority;
     memcpy(&(slotContainer->neighbor), neighbor, sizeof(open_addr_t));
+    memcpy(&(slotContainer->neighbor2), neighbor2, sizeof(open_addr_t));
 
     // fill that schedule entry with current asn
     ieee154e_getAsn(&(asn[0]));
@@ -442,6 +451,7 @@ owerror_t schedule_addActiveSlot(
                 slotContainer->anycast = FALSE;
                 slotContainer->channelOffset = 0;
                 memset(&slotContainer->neighbor, 0, sizeof(open_addr_t));
+                memset(&slotContainer->neighbor2, 0, sizeof(open_addr_t));
                 ENABLE_INTERRUPTS();
                 return E_FAIL;
             }
@@ -462,7 +472,7 @@ owerror_t schedule_addActiveSlot(
 \param slotOffset       The slotoffset of the slot to remove.
 \param type             The type of the slot to remove.
 \param isShared         The slot is shared or not.
-\param neighbor         The neighbor associated with this cell (all 0's if
+\param neighbor         The (primay) neighbor associated with this cell (all 0's if
    none)
 */
 owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bool isShared, open_addr_t *neighbor) {
@@ -525,6 +535,8 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
 
         backupEntry->neighbor.type = ADDR_NONE;
         memset(&backupEntry->neighbor.addr_64b[0], 0x00, sizeof(backupEntry->neighbor.addr_64b));
+        backupEntry->neighbor2.type = ADDR_NONE;
+        memset(&backupEntry->neighbor2.addr_64b[0], 0x00, sizeof(backupEntry->neighbor2.addr_64b));
 
         backupEntry->lastUsedAsn.bytes0and1 = 0;
         backupEntry->lastUsedAsn.bytes2and3 = 0;
@@ -558,7 +570,9 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
             slotContainer->isAutoCell = slotContainer->backupEntries[candidate_index].isAutoCell;
             slotContainer->priority = slotContainer->backupEntries[candidate_index].priority;
             memcpy(&slotContainer->neighbor, &(slotContainer->backupEntries[candidate_index].neighbor),
-                   sizeof(open_addr_t));
+                  sizeof(open_addr_t));
+            memcpy(&slotContainer->neighbor2, &(slotContainer->backupEntries[candidate_index].neighbor2),
+                  sizeof(open_addr_t));
 
             slotContainer->numTx = slotContainer->backupEntries[candidate_index].numTx;
             slotContainer->numRx = slotContainer->backupEntries[candidate_index].numRx;
@@ -1326,7 +1340,10 @@ void schedule_resetEntry(scheduleEntry_t *e) {
 
     e->neighbor.type = ADDR_NONE;
     memset(&e->neighbor.addr_64b[0], 0x00, sizeof(e->neighbor.addr_64b));
-
+   
+    e->neighbor2.type = ADDR_NONE;
+    memset(&e->neighbor2.addr_64b[0], 0x00, sizeof(e->neighbor2.addr_64b));
+   
     e->numRx = 0;
     e->numTx = 0;
     e->numTxACK = 0;
@@ -1345,6 +1362,9 @@ void schedule_resetBackupEntry(backupEntry_t *e) {
 
     e->neighbor.type = ADDR_NONE;
     memset(&e->neighbor.addr_64b[0], 0x00, sizeof(e->neighbor.addr_64b));
+    
+    e->neighbor2.type = ADDR_NONE;
+    memset(&e->neighbor2.addr_64b[0], 0x00, sizeof(e->neighbor2.addr_64b));
 
     e->numRx = 0;
     e->numTx = 0;

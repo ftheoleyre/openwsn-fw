@@ -88,6 +88,13 @@ See MINBE for an explanation of backoff.
 */
 #define MAXBE                5 // the standard compliant range of MAXBE is 3-8
 
+
+#ifndef ANYCAST_SCHEDULINGAA
+   #define MAX_NBNEIGHBORS 1
+#else
+   #define MAX_NBNEIGHBORS 2
+#endif
+
 /**
 \brief a threshold used for triggering the maintaining process.uint: percent
 */
@@ -124,6 +131,7 @@ typedef struct {
     bool isAutoCell;
     uint8_t channelOffset;
     open_addr_t neighbor;
+    open_addr_t neighbor2;    //if duo/anycast
     uint8_t numRx;
     uint8_t numTx;
     uint8_t numTxACK;
@@ -140,6 +148,7 @@ typedef struct {
     bool isAutoCell;
     uint8_t channelOffset;
     open_addr_t neighbor;
+    open_addr_t neighbor2;    //if duo/anycast
     uint8_t numRx;
     uint8_t numTx;
     uint8_t numTxACK;
@@ -158,6 +167,7 @@ typedef struct {
     bool anycast;
     uint8_t channelOffset;
     open_addr_t neighbor;
+    open_addr_t neighbor2;
     uint8_t numRx;
     uint8_t numTx;
     uint8_t numTxACK;
@@ -216,7 +226,8 @@ owerror_t schedule_addActiveSlot(
         bool isAutoCell,
         uint8_t channelOffset,
         uint8_t priority,
-        open_addr_t *neighbor
+        open_addr_t *neighbor,
+        open_addr_t *neighbor2
 );
 
 void schedule_getSlotInfo(

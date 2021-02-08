@@ -2610,7 +2610,9 @@ bool isValidEbFormat(OpenQueueEntry_t *pkt, uint16_t *lenIE) {
                                     FALSE,         // auto cell
                                     channeloffset, // channel offset
                                     0,             // default priority
-                                    &temp_neighbor // neighbor
+                                    &temp_neighbor,// neighbor (null)
+                                    &temp_neighbor // neighbor2 (null)
+                                                   
                             );
                         }
                     }

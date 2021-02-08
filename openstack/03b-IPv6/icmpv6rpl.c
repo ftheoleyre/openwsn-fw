@@ -638,7 +638,7 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
     // none found  and one existed
     else if (icmpv6rpl_vars.haveSecondParent){
        neighbors_setSecondPreferredParent(prevSecondParentIndex, FALSE);
-       icmpv6rpl_vars.haveSecondParent = TRUE;
+       icmpv6rpl_vars.haveSecondParent = FALSE;
        
        LOG_SUCCESS(COMPONENT_ICMPv6RPL, ERR_SECONDPARENT_CHANGE,
                 (errorparameter_t) prevSecondParentIndex,

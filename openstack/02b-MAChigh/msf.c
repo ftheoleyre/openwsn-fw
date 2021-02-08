@@ -68,7 +68,8 @@ void msf_init(void) {
             TRUE,                                                            // auto cell?
             msf_hashFunction_getChanneloffset(idmanager_getMyID(ADDR_64B)),  // channel offset
             0,                                                               // default priority
-            &temp_neighbor                                                   // neighbor
+            &temp_neighbor,                                                  // neighbor
+            &temp_neighbor                                                   // neighbor2
     );
 
     msf_vars.housekeepingTimerId = opentimers_create(TIMER_GENERAL_PURPOSE, TASKPRIO_MSF);
