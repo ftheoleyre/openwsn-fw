@@ -85,8 +85,7 @@ bool sixtop_addCells(
         cellInfo_ht *cellList,
         open_addr_t *previousHop,
         open_addr_t *neighbor2,
-        uint8_t cellOptions,
-        uint8_t priority
+        uint8_t cellOptions
 );
 
 bool sixtop_removeCells(
@@ -183,21 +182,14 @@ owerror_t sixtop_request(
         return E_FAIL;
     }
    
-    if (neighbor2 == NULL)
-       openserial_printf("prepare a sixtop request to %x:%x (for %d cells)\n",
-                      neighbor->addr_64b[6],
-                      neighbor->addr_64b[7],
-                      numCells
-                      );
-    else
-       openserial_printf("prepare an anycast sixtop request to %x:%x (for %d cells), second parent %x:%x\n",
+    openserial_printf("sixtop packet request created for %x:%x, seqnum %d, code %d, nbcells %d, anycast=%d",
                      neighbor->addr_64b[6],
                      neighbor->addr_64b[7],
+                      neighbors_getSequenceNumber(neighbor),
+                     code,
                      numCells,
-                     neighbor2->addr_64b[6],
-                     neighbor2->addr_64b[7]
+                     neighbor2 != NULL
                      );
-
 
     if (openqueue_getNum6PReq(neighbor) > 0) {
         // remove previous request as it's not sent out
@@ -216,8 +208,10 @@ owerror_t sixtop_request(
     pkt->owner = COMPONENT_SIXTOP_RES;
 
     // saves the id of the second receiver
-    if (neighbor2 != NULL)
+    if (neighbor2 != NULL){
        memcpy(&(sixtop_vars.neigbor_secondReceiver), neighbor2, sizeof(open_addr_t));
+       cellOptions = cellOptions;    // priority for neighbor = 0 (first one)
+    }
     else
        bzero(&(sixtop_vars.neigbor_secondReceiver), sizeof(open_addr_t));
    
@@ -322,7 +316,7 @@ owerror_t sixtop_request(
     sequenceNumber = neighbors_getSequenceNumber(neighbor);
     *((uint8_t * )(pkt->payload)) = sequenceNumber;
     len += 1;
-
+   
     // append 6p sfid
     if (packetfunctions_reserveHeader(&pkt, sizeof(uint8_t)) == E_FAIL) {
         return E_FAIL;
@@ -486,6 +480,7 @@ void task_sixtopNotifSendDone(void) {
 void task_sixtopNotifReceive(void) {
     OpenQueueEntry_t *msg;
     uint16_t lenIE;
+   
     // get received packet from openqueue
     msg = openqueue_sixtopGetReceivedPacket();
     if (msg == NULL) {
@@ -923,6 +918,8 @@ port_INLINE void sixtop_sendKA(void) {
 void timer_sixtop_six2six_timeout_fired(void) {
 
     if (sixtop_vars.six2six_state == SIX_STATE_WAIT_CLEARRESPONSE) {
+       openserial_printf("no response for the 6p clear, just clear locally\n");
+       
         // no response for the 6p clear, just clear locally
         schedule_removeAllNegotiatedCellsToNeighbor(sixtop_vars.cb_sf_getMetadata(), &sixtop_vars.neighborToClearCells);
         neighbors_resetSequenceNumber(&sixtop_vars.neighborToClearCells);
@@ -956,7 +953,7 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                 default:
                     // reset handler and state if the request is failed to send out
                     memset(&sixtop_vars.neighborOngoing3Steps, 0, sizeof(open_addr_t));
-                   sixtop_setState(SIX_STATE_IDLE);
+                    sixtop_setState(SIX_STATE_IDLE);
                     break;
             }
         } else {
@@ -1017,8 +1014,7 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                             msg->l2_sixtop_celllist_add,
                             &(msg->l2_nextORpreviousHop),
                             &(sixtop_vars.neigbor_secondReceiver),
-                            msg->l2_sixtop_cellOptions,
-                            msg->l2_sixtop_priority
+                            msg->l2_sixtop_cellOptions
                    );
                    sixtop_setState(SIX_STATE_IDLE);
                   
@@ -1044,12 +1040,13 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                             msg->l2_sixtop_celllist_add,
                             &(msg->l2_nextORpreviousHop),
                             &(sixtop_vars.neigbor_secondReceiver),
-                            msg->l2_sixtop_cellOptions,
-                            msg->l2_sixtop_priority
+                            msg->l2_sixtop_cellOptions
                     );
                 }
 
                 if (msg->l2_sixtop_command == IANA_6TOP_CMD_CLEAR) {
+                   openserial_printf("CLEAR COMMAND  send done\n");
+                   
                     schedule_removeAllNegotiatedCellsToNeighbor(
                             msg->l2_sixtop_frameID,
                             &(msg->l2_nextORpreviousHop)
@@ -1065,6 +1062,8 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
 
             // if the response is for CLEAR command, remove all the cells and reset seqnum regardless NO ack received.
             if (msg->l2_sixtop_command == IANA_6TOP_CMD_CLEAR) {
+               openserial_printf("clear command send done, without ack received\n");
+               
                 schedule_removeAllNegotiatedCellsToNeighbor(msg->l2_sixtop_frameID, &(msg->l2_nextORpreviousHop));
                 neighbors_resetSequenceNumber(&(msg->l2_nextORpreviousHop));
             }
@@ -1237,13 +1236,12 @@ void sixtop_six2six_notifyReceive(
                  )
                 ) {
                
-               openserial_printf("Incorrect State (%d) when the request is received (state, source and on-going @ follow)\n",
+               openserial_printf("Incorrect State (%d) when the request is received from %x:%x / %x:%x\n",
                                  sixtop_vars.six2six_state,
-                                 pkt->l2_nextORpreviousHop.addr_64b,
-                                 sixtop_vars.neighborOngoing3Steps.addr_64b);
-
-                 
-               
+                                 pkt->l2_nextORpreviousHop.addr_64b[6],
+                                 pkt->l2_nextORpreviousHop.addr_64b[7],
+                                 sixtop_vars.neighborOngoing3Steps.addr_64b[6],
+                                 sixtop_vars.neighborOngoing3Steps.addr_64b[7]);
                
                 returnCode = IANA_6TOP_RC_RESET;
                 break;
@@ -1433,7 +1431,6 @@ void sixtop_six2six_notifyReceive(
                   }
               
                   sixtop_vars.cellOptions = cellOptions_transformed;
-                  sixtop_vars.priority    = 1;
                   packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
                   *((uint8_t * )(response_pkt->payload)) = cellOptions_transformed;
                   response_pktLen += 1;
@@ -1462,20 +1459,21 @@ void sixtop_six2six_notifyReceive(
                          (packetfunction_isNullAddress(&(sixtop_vars.neigbor_secondReceiver)) == FALSE)
                          ){
                    
-                   openserial_printf("anycast negociation -> request with the list received from %d:%d, has now to negociate with %x:%x (ongoing %x:%x)\n",
+                   openserial_printf("anycast negociation -> request with the list received from %d:%d, has now to negociate with %x:%x (ongoing %x:%x), seqnum %d\n",
                                      response_pkt->l2_nextORpreviousHop.addr_64b[6],
                                      response_pkt->l2_nextORpreviousHop.addr_64b[7],
                                      sixtop_vars.neigbor_secondReceiver.addr_64b[6],
                                      sixtop_vars.neigbor_secondReceiver.addr_64b[7],
                                      sixtop_vars.neighborOngoing3Steps.addr_64b[6],
-                                     sixtop_vars.neighborOngoing3Steps.addr_64b[7]);
+                                     sixtop_vars.neighborOngoing3Steps.addr_64b[7],
+                                     neighbors_getSequenceNumber(&(sixtop_vars.neigbor_secondReceiver)));
                
                   // Anycast negociation -> I must send a request (with the list) to the second receiver
                   memcpy(&(response_pkt->l2_nextORpreviousHop), &(sixtop_vars.neigbor_secondReceiver), sizeof(open_addr_t));
                    
                   //has to use the seqnum corresponding to the second receiver
                   seqNum = neighbors_getSequenceNumber(&(sixtop_vars.neigbor_secondReceiver));
-    
+                   
                   //insert the cells in the request
                   uint8_t num = 0;
                   for(i=0; i<CELLLIST_MAX_LEN; i++){
@@ -1496,12 +1494,12 @@ void sixtop_six2six_notifyReceive(
                   
                   // append 6p celloptions
                   if ((cellOptions & (CELLOPTIONS_TX | CELLOPTIONS_RX)) != (CELLOPTIONS_TX | CELLOPTIONS_RX)) {
-                      cellOptions_transformed = cellOptions ^ (CELLOPTIONS_TX | CELLOPTIONS_RX);
+                      cellOptions_transformed = (cellOptions ^ (CELLOPTIONS_TX | CELLOPTIONS_RX)) | CELLOPTIONS_PRIORITY;
                   } else {
-                      cellOptions_transformed = cellOptions;
+                      cellOptions_transformed = cellOptions | CELLOPTIONS_PRIORITY;
                   }
+                  // priority = 1 for this second receiver (ack backoff = 1)
                   sixtop_vars.cellOptions = cellOptions_transformed;
-                  sixtop_vars.priority    = 1;
                   packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
                   *((uint8_t * )(response_pkt->payload)) = cellOptions_transformed;
                   response_pktLen += 1;
@@ -1671,6 +1669,8 @@ void sixtop_six2six_notifyReceive(
             response_pkt->l2_sixtop_cellOptions = cellOptions;
         }
    
+        openserial_printf("sixtop packet response generated, seqnum %d", seqNum);
+                                               
         // append 6p Seqnum
         packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
         *((uint8_t * )(response_pkt->payload)) = seqNum;
@@ -1725,7 +1725,9 @@ void sixtop_six2six_notifyReceive(
                   
                 // a reply is coming
                 case SIX_STATE_WAIT_ADDRESPONSE:
-                
+                    // updates the seqnum with the tx in any case (seqnums are updated per link)
+                    neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
+
                     // extract the list of cells from the response
                     i = 0;
                     memset(pkt->l2_sixtop_celllist_add, 0, sizeof(pkt->l2_sixtop_celllist_add));
@@ -1740,7 +1742,6 @@ void sixtop_six2six_notifyReceive(
                         i++;
                     }
                     numCells = i;
-                  
             
                     openserial_printf("rep received from %x:%x, ongoing %x:%x\n",
                                       pkt->l2_nextORpreviousHop.addr_64b[6],
@@ -1799,12 +1800,14 @@ void sixtop_six2six_notifyReceive(
                           }
                        }
                        else
-                          openserial_printf("Problem: the cells are now available\n");
+                          openserial_printf("Problem: the cells are not available in the schedule\n");
                           
-                       // record code, returnCode, frameID and cellOptions. They will be used when 6p repsonse senddone
+                       // record code, returnCode, frameID and cellOptions. They will be used when 6p response senddone
                        response_pkt->l2_sixtop_command = IANA_6TOP_CMD_ADD;
                        response_pkt->l2_sixtop_returnCode = IANA_6TOP_RC_SUCCESS;
                        response_pkt->l2_sixtop_cellOptions = sixtop_vars.cellOptions;
+                       
+                       openserial_printf("rep packet generated seqnum %d\n",neighbors_getSequenceNumber(&(sixtop_vars.neighborOngoing3Steps)));
                        
                        // append 6p Seqnum
                        packetfunctions_reserveHeader(&response_pkt, sizeof(uint8_t));
@@ -1844,8 +1847,6 @@ void sixtop_six2six_notifyReceive(
                        // record this packet as sixtop request message
                        response_pkt->l2_sixtop_messageType = SIXTOP_CELL_RESPONSE;
                        
-                       //openqueue_freePacketBuffer(response_pkt);
-                       
                        sixtop_send(response_pkt);
                        //stops here the function -> we will finalize the handshake when the packet will be sent
                        return;                       
@@ -1856,12 +1857,10 @@ void sixtop_six2six_notifyReceive(
                             pkt->l2_sixtop_celllist_add,          // celllist to be added
                             &(pkt->l2_nextORpreviousHop),         // neighbor that cells to be added to
                             &(sixtop_vars.neigbor_secondReceiver),// second receiver if needed
-                            sixtop_vars.cellOptions,              // cell options
-                            sixtop_vars.priority);
+                            sixtop_vars.cellOptions               // cell options
+                        );
                     }
                   
-                    // updates the seqnum with the tx in any case (seqnums are updated per link)
-                    neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     
                   break;
                 case SIX_STATE_WAIT_DELETERESPONSE:
@@ -1910,8 +1909,7 @@ void sixtop_six2six_notifyReceive(
                             pkt->l2_sixtop_celllist_add,  // celllist to be added
                             &(pkt->l2_nextORpreviousHop), // neighbor that cells to be added to
                             &(sixtop_vars.neigbor_secondReceiver), //second receiver if present
-                            sixtop_vars.cellOptions,      // cell options
-                            sixtop_vars.priority          // priority in RX
+                            sixtop_vars.cellOptions       // cell options
                     );
                     neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     break;
@@ -1944,6 +1942,8 @@ void sixtop_six2six_notifyReceive(
                     neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     break;
                 case SIX_STATE_WAIT_CLEARRESPONSE:
+                  openserial_printf("clear response wait\n");
+                  
                     schedule_removeAllNegotiatedCellsToNeighbor(
                             sixtop_vars.cb_sf_getMetadata(),
                             &(pkt->l2_nextORpreviousHop)
@@ -1951,10 +1951,13 @@ void sixtop_six2six_notifyReceive(
                     neighbors_resetSequenceNumber(&(pkt->l2_nextORpreviousHop));
                     break;
                 default:
-                  openserial_printf("sixtop response received after the timeout from %x:%x\n",
+                  openserial_printf("sixtop response received after the timeout from %x:%x, we discard it\n",
                                     pkt->l2_nextORpreviousHop.addr_64b[6],
                                     pkt->l2_nextORpreviousHop.addr_64b[7]);
-                  
+ 
+                   //TODO: be careful, we may have an inconsistent schedule if we update the seqnum without handling the content of the sixtop packet
+                   //neighbors_updateSequenceNumber(&(pkt->l2_nextORpreviousHop));
+
                     // The sixtop response arrived after 6P TIMEOUT, or it's a duplicated response. Remove 6P request if I have.
                     openqueue_remove6PrequestToNeighbor(&(pkt->l2_nextORpreviousHop));
                     break;
@@ -2016,42 +2019,61 @@ bool sixtop_addCells(
         cellInfo_ht *cellList,
         open_addr_t *previousHop,
         open_addr_t *neighbor2,
-        uint8_t cellOptions,
-        uint8_t priority
+        uint8_t cellOptions
 ) {
     uint8_t i;
     bool isShared, isAnycast;
     open_addr_t temp_neighbor;
     cellType_t type;
     bool hasCellsAdded;
+    uint8_t priority;
    
     // translate cellOptions to cell type
     if (cellOptions == CELLOPTIONS_TX) {
         type = CELLTYPE_TX;
         isShared = FALSE;
         isAnycast = FALSE;
+        priority = 0;
     }
     else if (cellOptions == CELLOPTIONS_RX) {
         type = CELLTYPE_RX;
         isShared = FALSE;
         isAnycast = FALSE;
+        priority = 0;
     }
     else if (cellOptions == (CELLOPTIONS_TX | CELLOPTIONS_ANYCAST)){
-        openserial_printf("CELLTYPE_TX_ANYCAST\n");
         type = CELLTYPE_TX;
         isShared = FALSE;
         isAnycast = TRUE;
+        priority = 0;
+        openserial_printf("CELLTYPE_TX_ANYCAST PRIO=%d\n", priority);
+    }
+    else if (cellOptions == (CELLOPTIONS_TX | CELLOPTIONS_ANYCAST | CELLOPTIONS_PRIORITY)){
+        type = CELLTYPE_TX;
+        isShared = FALSE;
+        isAnycast = TRUE;
+        priority = 1;
+        openserial_printf("CELLTYPE_TX_ANYCAST PRIO=%d\n", priority);
     }
     else if (cellOptions == (CELLOPTIONS_RX | CELLOPTIONS_ANYCAST)){
-        openserial_printf("CELLTYPE_RX_ANYCAST\n");
         type = CELLTYPE_RX;
         isShared = FALSE;
         isAnycast = TRUE;
+        priority = 0;
+        openserial_printf("CELLTYPE_RX_ANYCAST PRIO=%d\n", priority);
+    }
+    else if (cellOptions == (CELLOPTIONS_RX | CELLOPTIONS_ANYCAST | CELLOPTIONS_PRIORITY)){
+        type = CELLTYPE_RX;
+        isShared = FALSE;
+        isAnycast = TRUE;
+        priority = 1;
+        openserial_printf("CELLTYPE_RX_ANYCAST PRIO=%d\n", priority);
     }
     else if (cellOptions == (CELLOPTIONS_TX | CELLOPTIONS_RX | CELLOPTIONS_SHARED)) {
         type = CELLTYPE_TXRX;
         isShared = TRUE;
         isAnycast = FALSE;
+        priority = 0;
     }
     else{
        LOG_ERROR(COMPONENT_SIXTOP, ERR_BAD_CELLOPTIONS, cellOptions, 2);

@@ -214,6 +214,7 @@ void msf_handleRCError(uint8_t code, open_addr_t *address) {
     if (code == IANA_6TOP_RC_SEQNUM_ERR || code == IANA_6TOP_RC_CELLLIST_ERR) {
         // clear
         scheduler_push_task(msf_timer_clear_task, TASKPRIO_MSF);
+        openserial_printf("seqnum error -> clear task\n");
     }
 
     if (code == IANA_6TOP_RC_BUSY) {
@@ -534,7 +535,14 @@ void msf_housekeeping(void) {
 
     if (schedule_hasNegotiatedTxCellToNonParent(&parentNeighbor, &nonParentNeighbor) == TRUE) {
 
+       
         // send a clear request to the non-parent neighbor
+       openserial_printf("seqnum: send a clear command since we have cell(s) with non parent (%x:%x != %x:%x)\n",
+                         parentNeighbor.addr_64b[6],
+                         parentNeighbor.addr_64b[7],
+                         nonParentNeighbor.addr_64b[6],
+                         nonParentNeighbor.addr_64b[7]
+                         );
 
         sixtop_request(
                 IANA_6TOP_CMD_CLEAR,     // code
@@ -555,9 +563,12 @@ void msf_housekeeping(void) {
    
     //anycast tx to parent(s) -> we have a second parent, but no anycast cell
     if (schedule_hasUnicastTxCellsWithSecondParent(&parentNeighbor)){
+       openserial_printf("Has non anycast cell to parent %x:%x\n",
+                         parentNeighbor.addr_64b[6],
+                         parentNeighbor.addr_64b[7]);
        
        // send a clear request to the this parent neighbor, to renegociate anycast cells
-
+       //TODO: DEL CMD is rather recommended there!
        sixtop_request(
                IANA_6TOP_CMD_CLEAR,     // code
                &parentNeighbor,         // neighbor

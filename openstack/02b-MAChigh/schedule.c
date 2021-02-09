@@ -902,6 +902,13 @@ bool schedule_hasNegotiatedTxCellToNonParent(open_addr_t *parentNeighbor, open_a
                 schedule_vars.scheduleBuf[i].neighbor.type == ADDR_64B &&
                 packetfunctions_sameAddress(parentNeighbor, &schedule_vars.scheduleBuf[i].neighbor) == FALSE
                 ) {
+            openserial_printf("cell type %d, slotoffset %d, with %x:%x\n",
+                              schedule_vars.scheduleBuf[i].type,
+                              schedule_vars.scheduleBuf[i].slotOffset,
+                              schedule_vars.scheduleBuf[i].neighbor.addr_64b[6],
+                              schedule_vars.scheduleBuf[i].neighbor.addr_64b[7]
+                              );
+           
             memcpy(nonParentNeighbor, &schedule_vars.scheduleBuf[i].neighbor, sizeof(open_addr_t));
             ENABLE_INTERRUPTS();
             return TRUE;

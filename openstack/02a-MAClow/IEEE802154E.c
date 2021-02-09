@@ -1943,7 +1943,7 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
    #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
             
       #ifdef CCA_BEFORE_ACK
-            NOT TO ENTER HERE, NOT HADNLED NOW
+            NOT TO ENTER HERE, NOT HANDLED NOW
             CCA MODIFICATION NEEDED
       #endif
 
@@ -2961,7 +2961,7 @@ void endSlot(void) {
     open_addr_t slotNeighbor;
     open_addr_t parentAddress;
     slotinfo_element_t info;
-
+   
     // turn off the radio
     radio_rfOff();
 

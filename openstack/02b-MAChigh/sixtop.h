@@ -117,7 +117,7 @@ typedef struct {
     open_addr_t neigbor_secondReceiver;             // second receiver for the anycast negociation
     uint8_t commandID;
     uint8_t cellOptions;
-    uint8_t priority;
+    uint8_t priority; 
     
     cellInfo_ht celllist_toDelete[CELLLIST_MAX_LEN];
     sixtop_sf_getsfid_cbt cb_sf_getsfid;
