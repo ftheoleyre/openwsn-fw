@@ -23,10 +23,10 @@
 
 //TODO: CCA in python?
 //activate a CCA before txing the ack
-//#define ANYCAST_LL
-//#ifdef ANYCAST_LL
-//   #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
-//#endif
+#define ANYCAST_LL
+#ifdef ANYCAST_LL
+   #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
+#endif
 
 
 
