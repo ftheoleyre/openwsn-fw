@@ -49,6 +49,7 @@ static PyObject* OpenMote_getState(OpenMote* self) {
    PyObject* uart_icb_rx;
    PyObject* radio_icb_startFrame_cb;
    PyObject* radio_icb_endFrame_cb;
+   PyObject* radio_icb_CCAend_cb;
    PyObject* sctimer_icb_compare_cb;
    PyObject* icmpv6echo_vars;
    PyObject* icmpv6rpl_vars;
@@ -84,6 +85,8 @@ static PyObject* OpenMote_getState(OpenMote* self) {
    PyDict_SetItemString(returnVal, "radio_icb_startFrame_cb", radio_icb_startFrame_cb);
    radio_icb_endFrame_cb          = PyInt_FromLong((intptr_t)self->radio_icb.endFrame_cb);
    PyDict_SetItemString(returnVal, "radio_icb_endFrame_cb", radio_icb_endFrame_cb   );
+   radio_icb_CCAend_cb            = PyInt_FromLong((intptr_t)self->radio_icb.CCAend_cb);
+   PyDict_SetItemString(returnVal, "radio_icb_CCAend_cb", radio_icb_CCAend_cb);
    sctimer_icb_compare_cb         = PyInt_FromLong((intptr_t)self->sctimer_icb.compare_cb);
    PyDict_SetItemString(returnVal, "sctimer_icb_compare_cb", sctimer_icb_compare_cb);
    
@@ -190,6 +193,25 @@ static PyObject* OpenMote_getState(OpenMote* self) {
 #endif
    return returnVal;
 }
+
+static PyObject* OpenMote_radio_isr_CCAend(OpenMote* self, PyObject* args) {
+   int result;
+   
+   // parse the arguments
+   if (!PyArg_ParseTuple(args, "i", &result)) {
+      return NULL;
+   }
+   
+   // call the callback
+   radio_intr_CCAend(
+      self,
+      result
+   );
+   
+   // return successfully
+   Py_RETURN_NONE;
+}
+  
 
 static PyObject* OpenMote_radio_isr_startFrame(OpenMote* self, PyObject* args) {
    int capturedTime;
@@ -305,6 +327,7 @@ static PyMethodDef OpenMote_methods[] = {
    //=== BSP
    {  "radio_isr_startFrame",     (PyCFunction)OpenMote_radio_isr_startFrame,       METH_VARARGS,  ""},
    {  "radio_isr_endFrame",       (PyCFunction)OpenMote_radio_isr_endFrame,         METH_VARARGS,  ""},
+   {  "radio_isr_CCAend",         (PyCFunction)OpenMote_radio_isr_CCAend,           METH_VARARGS,  ""},
    {  "sctimer_isr",              (PyCFunction)OpenMote_sctimer_isr,                METH_NOARGS,   ""},
    {  "uart_isr_tx",              (PyCFunction)OpenMote_uart_isr_tx,                METH_NOARGS,   ""},
    {  "uart_isr_rx",              (PyCFunction)OpenMote_uart_isr_rx,                METH_NOARGS,   ""},

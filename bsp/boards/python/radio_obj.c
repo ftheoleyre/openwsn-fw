@@ -4,6 +4,7 @@
 \author Thomas Watteyne <watteyne@eecs.berkeley.edu>, May 2013.
 */
 
+
 #include "radio_obj.h"
 
 //=========================== defines =========================================
@@ -11,6 +12,20 @@
 //=========================== variables =======================================
 
 //=========================== prototypes ======================================
+
+void radio_setCCAEndCb(OpenMote *self, radio_capture_cbt cb) {
+
+//#ifdef TRACE_ON
+    printf("C@0x%x: radio_setCCAEndCb(cb=0x%x)... \n",self,cb);
+//#endif
+
+    self->radio_icb.CCAend_cb = cb;
+
+//#ifdef TRACE_ON
+    printf("C@0x%x: ...done.\n",self);
+//#endif
+}
+
 
 
 void radio_setStartFrameCb(OpenMote *self, radio_capture_cbt cb) {
@@ -149,6 +164,32 @@ void radio_rfOff(OpenMote *self) {
     printf("C@0x%x: ...done.\n",self);
 #endif
 }
+
+//===== CCA
+
+//trigger a CCA
+
+void radio_trigger_CCA(OpenMote *self) {
+ 
+ 
+#ifdef TRACE_ON
+    printf("C@0x%x: radio_trigger_CCA()... \n",self);
+#endif
+
+   PyObject *result;
+   result = PyObject_CallObject(self->callback[MOTE_NOTIF_radio_trigger_CCA], NULL);
+   if (result == NULL) {
+       printf("[CRITICAL] radio_trigger_CCA() returned NULL\r\n");
+       return;
+   }
+   Py_DECREF(result);
+
+   
+#ifdef TRACE_ON
+    printf("C@0x%x: ...done.\n",self);
+#endif
+}
+ 
 
 //===== TX
 
@@ -330,6 +371,11 @@ void radio_getReceivedFrame(OpenMote *self,
 }
 
 //=========================== interrupts ======================================
+
+void radio_intr_CCAend(OpenMote *self, uint32_t result) {
+    self->radio_icb.CCAend_cb(self, result);
+}
+ 
 
 void radio_intr_startOfFrame(OpenMote *self, uint32_t capturedTime) {
     self->radio_icb.startFrame_cb(self, capturedTime);

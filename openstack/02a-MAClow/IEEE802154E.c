@@ -559,7 +559,7 @@ void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime) {
 This function executes in ISR mode.
 */
 void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
-
+   
     if (ieee154e_vars.isSync == FALSE) {
         activity_synchronize_endOfFrame(code);
     } else {
@@ -570,13 +570,10 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
            case S_TXACKPREPARE:
            case S_TXACKREADY:
               ieee154e_vars.CCAResult = code;
-              
-              /*LOG_ERROR(COMPONENT_IEEE802154E,
-                        ERR_GENERIC,
-                        (errorparameter_t) 10 + ieee154e_vars.state,
-                        (errorparameter_t) code
-              );
-              */
+              //openserial_printf("ieee154e_CCAEnd, state %d, code %d\n",
+              //                  ieee154e_vars.state,
+              //                  ieee154e_vars.CCAResult);
+             
               //switch automatically to tx mode to prepare the possible tx (depending on the feedback)
               radio_txEnable();
               break;
@@ -2016,7 +2013,10 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
             radio_setFrequency(ieee154e_vars.freq, FREQ_TX);
 
    #else
+        // openserial_printf("%d >? %d", TsTxAckDelay-delayTx-maxTxAckPrepare, CCAdelay);
+          
          #ifdef CCA_BEFORE_ACK
+            
            // arm rtcca
            opentimers_scheduleAbsolute(
                    ieee154e_vars.timerId,                            // timerId
@@ -2201,7 +2201,7 @@ port_INLINE void activity_ri6(void) {
       LOG_ERROR(COMPONENT_IEEE802154E, ERR_CCA_BUSY,
                 (errorparameter_t) 2,
                 (errorparameter_t) ieee154e_vars.CCAResult);
-
+         openserial_printf("CCA has currently no effect, except printing a warning\n");
       // abort
       //endSlot();
    }

@@ -16,17 +16,9 @@
 
 
 // anycast slot scheduling with the SF
-#define ANYCAST_SCHEDULING
-#ifdef ANYCAST_SCHEDULING
-//   #define ANYCAST_LL
-#endif
+#define ANYCAST_SCHEDULING  // handle anycast cells in the schedule
+#define CCA_BEFORE_ACK     //CCA before ack is required for anycast
 
-//TODO: CCA in python?
-//activate a CCA before txing the ack
-#define ANYCAST_LL
-#ifdef ANYCAST_LL
-   #define CCA_BEFORE_ACK     //CCA before ack is required for anycast
-#endif
 
 
 

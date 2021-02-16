@@ -47,6 +47,8 @@
 //=========================== prototypes ======================================
 
 // radio
+void radio_intr_CCAend(OpenMote *self, uint32_t result);
+
 void radio_intr_startOfFrame(OpenMote *self, uint32_t capturedTime);
 
 void radio_intr_endOfFrame(OpenMote *self, uint32_t capturedTime);
@@ -141,6 +143,7 @@ enum {
     MOTE_NOTIF_radio_setFrequency,
     MOTE_NOTIF_radio_rfOn,
     MOTE_NOTIF_radio_rfOff,
+    MOTE_NOTIF_radio_trigger_CCA,
     MOTE_NOTIF_radio_loadPacket,
     MOTE_NOTIF_radio_txEnable,
     MOTE_NOTIF_radio_txNow,
@@ -178,6 +181,7 @@ typedef void (*radio_capture_cbt)(OpenMote *self, PORT_TIMER_WIDTH timestamp);
 typedef struct {
     radio_capture_cbt startFrame_cb;
     radio_capture_cbt endFrame_cb;
+    radio_capture_cbt CCAend_cb;
 } radio_icb_t;
 
 typedef void (*sctimer_cbt)(OpenMote *self);
