@@ -570,11 +570,20 @@ owerror_t internal_openserial_print(
         errorparameter_t arg1,
         errorparameter_t arg2
 ) {
+   uint8_t  asn[5];
+   // retrieve ASN
+   ieee154e_getAsn(asn);
+
 
     outputHdlcOpen();
     outputHdlcWrite(severity);
     outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[0]);
     outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[1]);
+    outputHdlcWrite(asn[0]);
+    outputHdlcWrite(asn[1]);
+    outputHdlcWrite(asn[2]);
+    outputHdlcWrite(asn[3]);
+    outputHdlcWrite(asn[4]);
     outputHdlcWrite(calling_component);
     outputHdlcWrite(error_code);
     outputHdlcWrite((uint8_t)((arg1 & 0xff00) >> 8));

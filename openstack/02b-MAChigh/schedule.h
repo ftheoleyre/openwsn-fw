@@ -297,6 +297,8 @@ channelOffset_t schedule_getChannelOffset(void);
 
 uint8_t schedule_getPriority(void);
 
+uint8_t schedule_getAnycast(void);
+
 bool schedule_getOkToSend(void);
 
 void schedule_resetBackoff(void);

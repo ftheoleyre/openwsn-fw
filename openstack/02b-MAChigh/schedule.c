@@ -1162,6 +1162,27 @@ uint8_t schedule_getPriority(void) {
 }
 
 
+/**
+\brief Get the anycast status of the current schedule entry.
+
+\returns The anycast status of the current schedule entry.
+*/
+uint8_t schedule_getAnycast(void) {
+    uint8_t returnVal;
+
+    INTERRUPT_DECLARATION();
+    DISABLE_INTERRUPTS();
+
+    returnVal = schedule_vars.currentScheduleEntry->anycast;
+
+    ENABLE_INTERRUPTS();
+
+    return returnVal;
+}
+
+
+
+
 
 /**
 \brief Check whether I can send on this slot.

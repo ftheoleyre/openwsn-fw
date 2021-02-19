@@ -151,6 +151,7 @@ typedef enum {
     S_TXACKOFFSET = 0x14,       // waiting to prepare for Tx ACK
 #ifdef CCA_BEFORE_ACK
     S_CCATRIGGER = 0x20,        // trigger a CCA before txing the ACK
+    S_CCATRIGGERED = 0x21,      // a CCA is triggered, we wait for the status
 #endif
     S_TXACKPREPARE = 0x15,      // preparing for Tx ACK
     S_TXACKREADY = 0x16,        // Tx ACK ready, waiting for 'go'
@@ -177,7 +178,7 @@ enum ieee154e_atomicdurations_enum {
     wdRadioTx                 =  (1342/PORT_US_PER_TICK),                  //  1000us (needs to be >delayTx) (SCuM need a larger value, 45 is tested and works)
     wdDataDuration            =  (5000/PORT_US_PER_TICK),                  //  5000us (measured 4280us with max payload)
     wdAckDuration             =  (3000/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
-    CCAdelay                  = (164/PORT_US_PER_TICK),                    //  164us (> 128us (spec))
+    CCAduration               = (164/PORT_US_PER_TICK),                    //  164us (> 128us (spec))
 #endif
    
 #if SLOTDURATION == 20
@@ -188,7 +189,7 @@ enum ieee154e_atomicdurations_enum {
     wdRadioTx                 =  (1342/PORT_US_PER_TICK),                  //  1000us (needs to be >delayTx) (SCuM need a larger value, 45 is tested and works)
     wdDataDuration            =  (5000/PORT_US_PER_TICK),                  //  5000us (measured 4280us with max payload)
     wdAckDuration             =  (3000/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
-    CCAdelay                  = (700/PORT_US_PER_TICK),                    //  128us for a CCA according to the spec, here 700us
+    CCAduration               =  (700/PORT_US_PER_TICK),                   //  128us for a CCA according to the spec, here 700us
 #endif
 
 #if SLOTDURATION == 160
@@ -233,18 +234,20 @@ enum ieee154e_linkOption_enum {
 #define DURATION_tt6 ieee154e_vars.lastCapturedTime+TsTxAckDelay-TsShortGT-delayRx
 #define DURATION_tt7 ieee154e_vars.lastCapturedTime+TsTxAckDelay+TsShortGT
 #define DURATION_tt8 ieee154e_vars.lastCapturedTime+wdAckDuration
+//CCA offset: the CCA is triggered at TsTxAckDelay, and the ack tx afterwards
+#ifdef CCA_BEFORE_ACK
+    #define CCA_offset (CCAduration + delayTx) * (schedule_getPriority())
+    #define DURATION_rtcca ieee154e_vars.lastCapturedTime+TsTxAckDelay+delayRx
+#endif
 // RX
 #define DURATION_rt1 ieee154e_vars.lastCapturedTime+TsTxOffset-TsLongGT-delayRx-maxRxDataPrepare
 #define DURATION_rt2 ieee154e_vars.lastCapturedTime+TsTxOffset-TsLongGT-delayRx
 #define DURATION_rt3 ieee154e_vars.lastCapturedTime+TsTxOffset+TsLongGT
 #define DURATION_rt4 ieee154e_vars.lastCapturedTime+wdDataDuration
 #define DURATION_rt5 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx-maxTxAckPrepare
-#ifdef CCA_BEFORE_ACK
-    #define DURATION_rtcca DURATION_rt5-CCAdelay
-#endif
-#define DURATION_rt6 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx
-#define DURATION_rt7 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx+wdRadioTx
-#define DURATION_rt8 ieee154e_vars.lastCapturedTime+wdAckDuration
+#define DURATION_rt6 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx+CCA_offset
+#define DURATION_rt7 ieee154e_vars.lastCapturedTime+TsTxAckDelay-delayTx+CCA_offset+wdRadioTx
+#define DURATION_rt8 ieee154e_vars.lastCapturedTime+wdAckDuration+CCA_offset //CCA_offset required??
 // serialInhibit
 #define DURATION_si  ieee154e_vars.slotDuration-SERIALINHIBITGUARD
 

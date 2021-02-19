@@ -1016,7 +1016,10 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                             &(sixtop_vars.neigbor_secondReceiver),
                             msg->l2_sixtop_cellOptions
                    );
-                   sixtop_setState(SIX_STATE_IDLE);
+                  
+                   // we are already idle if we received an unicast sixtop request
+                   if (sixtop_vars.six2six_state != SIX_STATE_IDLE)
+                      sixtop_setState(SIX_STATE_IDLE);
                   
                }
                 if (msg->l2_sixtop_command == IANA_6TOP_CMD_DELETE) {
