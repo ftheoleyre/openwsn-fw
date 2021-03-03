@@ -508,12 +508,13 @@ void ieee154e_startOfFrame(PORT_TIMER_WIDTH capturedTime) {
             case S_TXACKOFFSET:
               openserial_printf("State error S_TXACKOFFSET\n");
             break;
+           case S_CCATRIGGER:
            case S_CCATRIGGERED:
               //nothing to do -> we will stop the tx after this CCA
               break;
             default:
                 // log the error
-                openserial_printf("State error\n");
+                openserial_printf("State error (triggered=%d) (trigger=%d)\n", S_CCATRIGGERED, S_CCATRIGGER);
               
                 LOG_ERROR(COMPONENT_IEEE802154E, ERR_WRONG_STATE_IN_NEWSLOT,
                           (errorparameter_t)ieee154e_vars.state,
@@ -549,6 +550,11 @@ void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime) {
             case S_TXACK:
                 activity_ri9(referenceTime);
                 break;
+            case S_CCATRIGGERED:
+            case S_CCATRIGGER:
+                openserial_printf("end of slot after rx\n");
+                endSlot();
+                break;
             default:
                 // log the error
                 LOG_ERROR(COMPONENT_IEEE802154E, ERR_WRONG_STATE_IN_ENDOFFRAME,
@@ -577,18 +583,46 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
        activity_synchronize_endOfFrame(code);
        return;
     }
+   
+  openserial_printf("");
+  openserial_printf("cca code: %d, state %d", code, ieee154e_vars.state);
+  openserial_printf("");
+  openserial_printf("");
 
     switch (ieee154e_vars.state) {
            
        //updates the result of the last CCA
        case S_CCATRIGGERED:
 
+          // we captured the ack of the primary receiver
+          if (ieee154e_vars.CCAResult == CCA_RXING){
+             LOG_INFO(COMPONENT_IEEE802154E, ERR_PRIMARY_ANYCAST,
+                      (errorparameter_t) FALSE,
+                      (errorparameter_t) ieee154e_vars.CCAResult);
+             
+             // free the received data, the primary receiver acknowledged it
+             openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
+             ieee154e_vars.dataReceived = NULL;
+           
+             //cancel the current end of cca interrupt
+             opentimers_scheduleAbsolute(
+                     ieee154e_vars.timerId,                            // timerId
+                     ieee154e_vars.slotDuration,                       // duration
+                     ieee154e_vars.startOfSlotReference,               // reference
+                     TIME_TICS,                                        // timetype
+                     isr_ieee154e_newSlot                              // callback
+             );
+             
+             openserial_printf("the actual end of slot will be triggered by the end of the reception (=ack)\n");
+             
+             return;
+          }
           // the primary receiver acknowledged the packet (CCA != IDLE)
           if (ieee154e_vars.CCAResult != CCA_IDLE){
              LOG_INFO(COMPONENT_IEEE802154E, ERR_PRIMARY_ANYCAST,
                       (errorparameter_t) FALSE,
                       (errorparameter_t) ieee154e_vars.CCAResult);
-               
+             
              // free the received data, the primary receiver acknowledged it
              openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
 
@@ -605,10 +639,6 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
                       (errorparameter_t) TRUE,
                       (errorparameter_t) ieee154e_vars.CCAResult);
            
-          openserial_printf("");
-          openserial_printf("cca code: %d", code);
-          openserial_printf("");
-          openserial_printf("");
           
           openserial_printf("DURATION_rt6 %d", DURATION_rt6);
           openserial_printf("DURATION_rtcca %d", DURATION_rtcca);
@@ -2126,11 +2156,14 @@ port_INLINE void activity_ri6(void) {
    if (schedule_getPriority() > 0){
       opentimers_scheduleAbsolute(
              ieee154e_vars.timerId,                            // timerId
-             DURATION_rtcca,                                     // duration
+             DURATION_rtcca,                                   // duration
              ieee154e_vars.startOfSlotReference,               // reference
              TIME_TICS,                                        // timetype
              isr_ieee154e_timer                                // callback
       );
+      
+      openserial_printf("timeout: %d < %d\n", DURATION_rtcca, ieee154e_vars.slotDuration);
+
    }
    // no CCA (rest of the cases)
    else{
@@ -2212,9 +2245,13 @@ port_INLINE void activity_ri6(void) {
        radio_txEnable();
        changeState(S_TXACKREADY);
     }
-    else{
+    else if (schedule_getPriority() > 0){
        radio_rxEnable();
        changeState(S_CCATRIGGER);
+       openserial_printf("Trigger a CCA (on=%d)\n", (radio_spiReadReg(0x01) & 0x1F) == 6);
+    }
+    else{
+       openserial_printf("CCA incorrect state\n");
     }
    
    
@@ -2236,16 +2273,12 @@ port_INLINE void activity_rie4(void) {
 
 
 
-// CCA beofre txing the ack for the secondary receiver
+// CCA before txing the ack for the secondary receiver
 
 
 #ifdef CCA_BEFORE_ACK
 port_INLINE void activity_ricca(void) {
-  
-   //ask the radio to make a CCA (callback for the result)
-   ieee154e_vars.CCAResult = CCA_FAIL; //default CCA result
-   radio_trigger_CCA();
-   
+
     //trigger a timeout to receive the result of the CCA command
    changeState(S_CCATRIGGERED);
    
@@ -2257,6 +2290,15 @@ port_INLINE void activity_ricca(void) {
            TIME_TICS,                                        // timetype
            isr_ieee154e_timer                                // callback
    );
+
+   //debug
+   openserial_printf("CCA triggered: %d + %d (=%d) < %d\n", DURATION_rtcca, CCAduration, DURATION_rtcca + CCAduration, ieee154e_vars.slotDuration);
+
+   //ask for the radio to make a CCA (callback later for the result)
+   //be careful: the callback may be called immediately if the radio is currently receiving something
+   //thus, radio_trigger_CCA() = last thing to be called in this function
+   ieee154e_vars.CCAResult = CCA_FAIL;
+   radio_trigger_CCA();
 }
 
 //timeout of the CCA trigger
@@ -2378,6 +2420,10 @@ port_INLINE void activity_ri9(PORT_TIMER_WIDTH capturedTime) {
 
     // free the ack we just sent so corresponding RAM memory can be recycled
     openqueue_freePacketBuffer(ieee154e_vars.ackToSend);
+
+   if (schedule_getPriority() > 0){
+      openserial_printf("ri9 - ack finished ");
+   }
 
     // clear local variable
     ieee154e_vars.ackToSend = NULL;

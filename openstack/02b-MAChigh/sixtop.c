@@ -1794,7 +1794,8 @@ void sixtop_six2six_notifyReceive(
                                 response_pkt->l2_sixtop_celllist_add[i].channeloffset = pkt->l2_sixtop_celllist_add[i].channeloffset;
                                 response_pkt->l2_sixtop_celllist_add[i].isUsed = TRUE;
                                 
-                                openserial_printf("%d / %d / %d\n",
+                                if (response_pkt->l2_sixtop_celllist_add[i].isUsed)
+                                   openserial_printf("%d / %d / %d\n",
                                                   response_pkt->l2_sixtop_celllist_add[i].slotoffset,
                                                   response_pkt->l2_sixtop_celllist_add[i].channeloffset,
                                                   response_pkt->l2_sixtop_celllist_add[i].isUsed

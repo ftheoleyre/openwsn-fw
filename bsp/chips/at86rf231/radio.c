@@ -93,15 +93,27 @@ void radio_setCCAEndCb(radio_capture_cbt cb) {
 
 //ask the radio to trigger a CCA (ED mode)
 void radio_trigger_CCA(void){
+   
+   // frame in reception -> busy
+   if (radio_vars.state == RADIOSTATE_RECEIVING){
+      openserial_printf("the radio is receiving a frame -> no need to trigger a CCA -> busy\n");
+      radio_vars.CCAEnd_cb(CCA_RXING);
+      return;
+   }
+   
    //force the RX mode to be sure the CCA can be triggered
    if ((radio_spiReadReg(RG_TRX_STATUS) & 0x1F) != RX_ON){
       LOG_ERROR(COMPONENT_RADIO, ERR_GENERIC,
                 (errorparameter_t) 67,
                 (errorparameter_t) radio_spiReadReg(RG_TRX_STATUS) & 0x1F);
 
+      openserial_printf("the radio must be ON for a CCA (state = %d)\n", radio_vars.state);
+      
       radio_rxEnable();
    }
    
+   openserial_printf("CCA triggered by the radio\n");
+
    //CCA triggered -> we will receive the CCA_END interruption (if not masked)
    radio_spiWriteReg(RG_PHY_CC_CCA, 0xa0); //SR_CCA_REQUEST & CCA_MODE(=1 for energy only));
 }
@@ -454,11 +466,7 @@ kick_scheduler_t radio_isr(void) {
    if (irq_status & AT_IRQ_CCA_ED_DONE) {
       uint8_t  reg_value;
       reg_value  = radio_spiReadReg(RG_TRX_STATUS);
-       
- /*     LOG_INFO(COMPONENT_RADIO, ERR_GENERIC,
-                (errorparameter_t) reg_value,
-                (errorparameter_t) reg_value & 0x40);
-*/
+
       //the CCA was correctely completed)
       if((reg_value & 0x80) == 0x80){     //SR_CCA_DONE, bit7, 1 = correct completion
            if ((reg_value & 0x40) == 0x40) //SR_CCA_STATUS, bit 6, 1 = no signal detected

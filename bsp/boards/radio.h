@@ -51,6 +51,7 @@ typedef enum{
    CCA_IDLE                   = 0x00,
    CCA_BUSY                   = 0x01,
    CCA_FAIL                   = 0x02,
+   CCA_RXING                  = 0x03,
 } cca_res_t;
 
 //=========================== typedef =========================================
