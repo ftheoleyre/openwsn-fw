@@ -314,6 +314,9 @@ enum {
 #endif
 #ifdef ANYCAST_SCHEDULING
    ERR_SECONDPARENT_CHANGE             = 0x5c, // The nodes changes its preferred second parent (neighbor index {0} -> {1})
+   ERR_SCHEDULE_ADD                    = 0x5d, // cell inserted in the schedule (slot {0}, anycast {1})
+   ERR_SCHEDULE_DEL                    = 0x5e, // cell removed in the schedule (slot {0}, type {1})
+
 #endif
 };
 

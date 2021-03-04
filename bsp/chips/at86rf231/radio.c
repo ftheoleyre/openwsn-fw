@@ -96,7 +96,6 @@ void radio_trigger_CCA(void){
    
    // frame in reception -> busy
    if (radio_vars.state == RADIOSTATE_RECEIVING){
-      openserial_printf("the radio is receiving a frame -> no need to trigger a CCA -> busy\n");
       radio_vars.CCAEnd_cb(CCA_RXING);
       return;
    }

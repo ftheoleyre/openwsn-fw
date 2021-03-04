@@ -261,6 +261,8 @@ owerror_t schedule_addActiveSlot(
     scheduleEntry_t *nextSlotWalker;
 
     backupEntry_t *backupEntry;
+   
+    LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_ADD, (errorparameter_t) slotOffset, (errorparameter_t) anycast);
 
     uint8_t i;
     bool entry_found;
@@ -484,7 +486,10 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
 
     scheduleEntry_t *slotContainer;
     scheduleEntry_t *previousSlotWalker;
+    
+    LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_DEL, (errorparameter_t) slotOffset, (errorparameter_t) type);
 
+   
     INTERRUPT_DECLARATION();
     DISABLE_INTERRUPTS();
 
@@ -526,7 +531,7 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
     }
 
     if (isbackupEntry) {
-
+       
         // reset the backup entry
         backupEntry->type = CELLTYPE_OFF;
         backupEntry->shared = FALSE;

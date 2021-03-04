@@ -188,8 +188,8 @@ enum ieee154e_atomicdurations_enum {
     TsShortGT                 =   (700/PORT_US_PER_TICK),                  //   700us
     wdRadioTx                 =  (1342/PORT_US_PER_TICK),                  //  1000us (needs to be >delayTx) (SCuM need a larger value, 45 is tested and works)
     wdDataDuration            =  (5000/PORT_US_PER_TICK),                  //  5000us (measured 4280us with max payload)
-    wdAckDuration             =  (3000/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
-    CCAduration               =  (700/PORT_US_PER_TICK),                   //  128us for a CCA according to the spec, here 700us
+    wdAckDuration             =  (3500/PORT_US_PER_TICK),                  //  3000us (measured 1000us)
+    CCAduration               =  (9500/PORT_US_PER_TICK),                   //  128us for a CCA according to the spec, here 700us
 #endif
 
 #if SLOTDURATION == 160

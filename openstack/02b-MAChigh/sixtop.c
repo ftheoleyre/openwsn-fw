@@ -175,21 +175,23 @@ owerror_t sixtop_request(
     uint16_t length_groupid_type;
     uint8_t sequenceNumber;
     owerror_t outcome;
-
+   
+    openserial_printf("sixtop packet request created for %x:%x, seqnum %d, code %d, nbcells %d, anycast=%d, state=%d",
+                    neighbor->addr_64b[6],
+                    neighbor->addr_64b[7],
+                    neighbors_getSequenceNumber(neighbor),
+                    code,
+                    numCells,
+                    neighbor2 != NULL,
+                    sixtop_vars.six2six_state
+                    );
     // filter parameters: handler, status and neighbor
     if (sixtop_vars.six2six_state != SIX_STATE_IDLE || neighbor == NULL) {
         // neighbor can't be none or previous transcation doesn't finish yet
         return E_FAIL;
     }
    
-    openserial_printf("sixtop packet request created for %x:%x, seqnum %d, code %d, nbcells %d, anycast=%d",
-                     neighbor->addr_64b[6],
-                     neighbor->addr_64b[7],
-                      neighbors_getSequenceNumber(neighbor),
-                     code,
-                     numCells,
-                     neighbor2 != NULL
-                     );
+   
 
     if (openqueue_getNum6PReq(neighbor) > 0) {
         // remove previous request as it's not sent out
@@ -934,7 +936,7 @@ void timer_sixtop_six2six_timeout_fired(void) {
 void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
     msg->owner = COMPONENT_SIXTOP_RES;
      
-    openserial_printf("packet sent to %x:%x, type %d\n",
+    openserial_printf("sixtop packet sendDone to %x:%x, type %d\n",
                       msg->l2_nextORpreviousHop.addr_64b[6],
                       msg->l2_nextORpreviousHop.addr_64b[7],
                       msg->l2_sixtop_messageType);
@@ -1795,10 +1797,10 @@ void sixtop_six2six_notifyReceive(
                                 response_pkt->l2_sixtop_celllist_add[i].isUsed = TRUE;
                                 
                                 if (response_pkt->l2_sixtop_celllist_add[i].isUsed)
-                                   openserial_printf("%d / %d / %d\n",
+                                   openserial_printf("%d: %d / %d\n",
+                                                  response_pkt->l2_sixtop_celllist_add[i].isUsed,
                                                   response_pkt->l2_sixtop_celllist_add[i].slotoffset,
-                                                  response_pkt->l2_sixtop_celllist_add[i].channeloffset,
-                                                  response_pkt->l2_sixtop_celllist_add[i].isUsed
+                                                  response_pkt->l2_sixtop_celllist_add[i].channeloffset
                                                   );
                              }
                           }
@@ -2090,8 +2092,9 @@ bool sixtop_addCells(
     hasCellsAdded = FALSE;
     // add cells to schedule
     for (i = 0; i < CELLLIST_MAX_LEN; i++) {
-        openserial_printf("%d: %d / %d", cellList[i].isUsed, cellList[i].slotoffset, cellList[i].channeloffset);
         if (cellList[i].isUsed) {
+           openserial_printf("%d: %d / %d", cellList[i].isUsed, cellList[i].slotoffset, cellList[i].channeloffset);
+           
             hasCellsAdded = TRUE;
             schedule_addActiveSlot(cellList[i].slotoffset, type, isShared, isAnycast, FALSE, cellList[i].channeloffset, priority, &temp_neighbor, neighbor2);
         }
