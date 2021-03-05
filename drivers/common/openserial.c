@@ -116,6 +116,51 @@ void openserial_init(void) {
 
 //===== transmitting
 
+
+
+owerror_t openserial_printStat_pk(open_addr_t *src, open_addr_t *dest, uint8_t mode, uint8_t validRx, uint8_t type, uint8_t slotOffset, uint8_t channelOffset, uint8_t priority, uint8_t nb_retx, uint8_t lqi, uint8_t rssi, uint8_t crc) {
+    uint8_t i;
+    stat_pk_t stat;
+    uint8_t asn[5];
+    ieee154e_getAsn(asn);
+
+    memcpy(&(stat.l2_src[0]), &(src->addr_64b[0]), sizeof(src->addr_64b));
+    memcpy(&(stat.l2_dest[0]), &(dest->addr_64b[0]), sizeof(dest->addr_64b));
+    stat.mode           = mode;
+    stat.type           = type;
+    stat.slotOffset     = slotOffset;
+    stat.channelOffset  = channelOffset;
+    stat.priority       = priority;
+    stat.nb_retx        = nb_retx;
+    stat.validRx        = validRx;
+    stat.lqi            = lqi;
+    stat.rssi           = rssi;
+    stat.crc            = crc;    
+
+    outputHdlcOpen();
+    outputHdlcWrite(SERFRAME_MOTE2PC_STAT);
+    outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[0]);
+    outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[1]);
+    outputHdlcWrite(asn[0]);
+    outputHdlcWrite(asn[1]);
+    outputHdlcWrite(asn[2]);
+    outputHdlcWrite(asn[3]);
+    outputHdlcWrite(asn[4]);
+    outputHdlcWrite(STAT_PK);
+    for (i = 0; i < sizeof(stat_pk_t); i++) {
+        outputHdlcWrite(((uint8_t*)&stat)[i]);
+    }
+    outputHdlcClose();
+
+    // start TX'ing
+    openserial_flush();
+
+    return E_SUCCESS;
+}
+
+
+
+
 owerror_t openserial_printStatus(uint8_t statusElement, uint8_t *buffer, uint8_t length) {
     uint8_t i;
 

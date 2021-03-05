@@ -48,6 +48,7 @@
 #define SERFRAME_MOTE2PC_CRITICAL                ((uint8_t)'C')
 #define SERFRAME_MOTE2PC_SNIFFED_PACKET          ((uint8_t)'P')
 #define SERFRAME_MOTE2PC_PRINTF                  ((uint8_t)'F')
+#define SERFRAME_MOTE2PC_STAT                    ((uint8_t)'K')
 
 // frames sent PC->mote
 #define SERFRAME_PC2MOTE_SETROOT                 ((uint8_t)'R')
@@ -107,6 +108,37 @@ enum {
     L_VERBOSE = 6
 };
 
+enum{
+   STAT_PK = 1,
+};
+
+typedef struct {
+    uint8_t  l2_src[8];
+    uint8_t  l2_dest[8];
+    uint8_t  mode;
+    uint8_t  validRx;
+    uint8_t  type;
+    uint8_t  slotOffset;
+    uint8_t  channelOffset;
+    uint8_t  priority;
+    uint8_t  nb_retx;
+    uint8_t  lqi;
+    uint8_t  rssi;
+    uint8_t  crc;
+} stat_pk_t;
+
+enum {
+   MODE_RX = 1,
+   MODE_TX = 2,
+};
+
+enum {
+    PKTYPE_ACK = 1,
+    PKTYPE_FRAME = 2,
+    PKTYPE_EB = 3,
+    PKTYPE_RPL = 4,
+};
+
 //=========================== variables =======================================
 
 //=========================== prototypes ======================================
@@ -137,6 +169,17 @@ typedef struct {
 void openserial_init(void);
 
 // transmitting
+
+//each type of statistic
+owerror_t openserial_printStat_pk(
+                                  open_addr_t *src, open_addr_t *dest,
+                                  uint8_t mode, uint8_t validRx, uint8_t type, 
+                                  uint8_t slotOffset, uint8_t channelOffset, uint8_t priority,
+                                  uint8_t nb_retx,
+                                  uint8_t lqi, uint8_t rssi, uint8_t crc
+                                  );
+
+
 owerror_t openserial_printStatus(
         uint8_t statusElement,
         uint8_t *buffer,

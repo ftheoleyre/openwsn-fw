@@ -15,15 +15,15 @@
 
 void radio_setCCAEndCb(OpenMote *self, radio_capture_cbt cb) {
 
-//#ifdef TRACE_ON
+#ifdef TRACE_ON
     printf("C@0x%x: radio_setCCAEndCb(cb=0x%x)... \n",self,cb);
-//#endif
+#endif
 
     self->radio_icb.CCAend_cb = cb;
 
-//#ifdef TRACE_ON
+#ifdef TRACE_ON
     printf("C@0x%x: ...done.\n",self);
-//#endif
+#endif
 }
 
 

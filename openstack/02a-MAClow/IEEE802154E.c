@@ -1633,7 +1633,8 @@ port_INLINE void activity_tie6(void) {
 
 port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
     ieee802154_header_iht ieee802514_header;
-
+    uint8_t isValid = FALSE;
+    
     // change state
     changeState(S_TXPROC);
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
@@ -1738,7 +1739,8 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
         packetfunctions_tossHeader(&ieee154e_vars.ackReceived, ieee802514_header.headerLength);
 
         // break if invalid ACK
-        if (isValidAck(&ieee802514_header, ieee154e_vars.dataToSend) == FALSE) {
+        isValid = isValidAck(&ieee802514_header, ieee154e_vars.dataToSend);
+        if (isValid == FALSE) {
             // break from the do-while loop and execute the clean-up code below
             break;
         }
@@ -1758,6 +1760,20 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
         // in any case, execute the clean-up code below (processing of ACK done)
     } while (0);
 
+    openserial_printStat_pk(
+                            &(ieee154e_vars.ackReceived->l2_nextORpreviousHop),
+                            &(ieee802514_header.dest),
+                            MODE_RX,
+                            isValid,
+                            ieee154e_vars.ackReceived->l2_frameType,
+                            schedule_getSlottOffset(),
+                            schedule_getChannelOffset(),
+                            schedule_getPriority(),
+                            0,
+                            1,1,1                        // empty rssi, lsi, crc for TX
+                            );
+  
+    
     // free the received ack so corresponding RAM memory can be recycled
     openqueue_freePacketBuffer(ieee154e_vars.ackReceived);
 
@@ -1966,6 +1982,23 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
         ieee154e_vars.dataReceived->l2_dsn = ieee802514_header.dsn;
         ieee154e_vars.dataReceived->l2_IEListPresent = ieee802514_header.ieListPresent;
         memcpy(&(ieee154e_vars.dataReceived->l2_nextORpreviousHop), &(ieee802514_header.src), sizeof(open_addr_t));
+        
+        //events
+        openserial_printStat_pk(
+                                &(ieee802514_header.src),
+                                &(ieee802514_header.dest),
+                                MODE_RX,
+                                isValidRxFrame(&ieee802514_header),
+                                ieee802514_header.frameType,
+                                schedule_getSlottOffset(),
+                                schedule_getChannelOffset(),
+                                schedule_getPriority(),
+                                0,
+                                ieee154e_vars.dataReceived->l1_rssi,
+                                ieee154e_vars.dataReceived->l1_lqi,
+                                ieee154e_vars.dataReceived->l1_crc
+                                );
+        
 
         // verify that incoming security level is acceptable
         if (IEEE802154_security_acceptableLevel(ieee154e_vars.dataReceived, &ieee802514_header) == FALSE) {
@@ -2285,10 +2318,10 @@ port_INLINE void activity_rie4(void) {
 
 
 
-// CCA before txing the ack for the secondary receiver
-
 
 #ifdef CCA_BEFORE_ACK
+
+// CCA before txing the ack for the secondary receiver
 port_INLINE void activity_ricca(void) {
 
     //trigger a timeout to receive the result of the CCA command
@@ -2430,9 +2463,23 @@ port_INLINE void activity_ri9(PORT_TIMER_WIDTH capturedTime) {
     // free the ack we just sent so corresponding RAM memory can be recycled
     openqueue_freePacketBuffer(ieee154e_vars.ackToSend);
 
-   if (schedule_getPriority() > 0){
-      openserial_printf("ri9 - ack finished ");
-   }
+    if (schedule_getPriority() > 0){
+        openserial_printf("ri9 - ack finished ");
+    }
+    
+    //stats
+    openserial_printStat_pk(
+                            idmanager_getMyID(ADDR_64B),
+                            &(ieee154e_vars.dataReceived->l2_nextORpreviousHop),
+                            MODE_TX,
+                            TRUE,                        //a TX is always valid
+                            IEEE154_TYPE_ACK,
+                            schedule_getSlottOffset(),
+                            schedule_getChannelOffset(),
+                            schedule_getPriority(),
+                            0,
+                            1,1,1                        // empty rssi, lsi, crc for TX
+                            );                            
 
     // clear local variable
     ieee154e_vars.ackToSend = NULL;
