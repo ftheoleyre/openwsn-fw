@@ -111,6 +111,7 @@ enum {
 enum{
     EVENT_PKT = 1,
     EVENT_SCHEDULE = 2,
+    EVENT_RPL = 3,
 };
 
 // packet transmission / reception
@@ -162,6 +163,20 @@ enum {
 };
 
 
+//RPL
+typedef struct {
+    uint8_t  moteid[8];
+    uint8_t  event;
+    uint8_t  addr1[8];
+    uint8_t  addr2[8];
+} stat_rpl_t;
+
+enum {
+   EVENT_RPL_PARENT_CHANGE = 1,
+   EVENT_RPL_SECONDPARENT_CHANGE = 2,
+};
+
+
 //=========================== variables =======================================
 
 //=========================== prototypes ======================================
@@ -206,6 +221,8 @@ owerror_t openserial_printEvent_schedule(uint8_t event,
                                         open_addr_t *neighbor, open_addr_t *neighbor2,
                                         uint8_t type, uint8_t shared, uint8_t anycast, uint8_t priority,
                                         uint8_t slotOffset, uint8_t channelOffset);
+
+owerror_t openserial_printEvent_rpl(uint8_t event, open_addr_t *addr1, open_addr_t *addr2);
 
 owerror_t openserial_printStatus(
         uint8_t statusElement,

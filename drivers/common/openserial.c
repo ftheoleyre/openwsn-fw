@@ -153,7 +153,7 @@ owerror_t openserial_printEvent_pkt(
     outputHdlcWrite(asn[3]);
     outputHdlcWrite(asn[4]);
     outputHdlcWrite(EVENT_PKT);
-    for (i = 0; i < sizeof(stat_pkt_t); i++) {
+    for (i = 0; i < sizeof(stat); i++) {
         outputHdlcWrite(((uint8_t*)&stat)[i]);
     }
     outputHdlcClose();
@@ -200,7 +200,7 @@ owerror_t openserial_printEvent_schedule(uint8_t event,
     outputHdlcWrite(asn[3]);
     outputHdlcWrite(asn[4]);
     outputHdlcWrite(EVENT_SCHEDULE);
-    for (i = 0; i < sizeof(stat_schedule_t); i++) {
+    for (i = 0; i < sizeof(stat); i++) {
         outputHdlcWrite(((uint8_t*)&stat)[i]);
     }
     outputHdlcClose();
@@ -210,6 +210,47 @@ owerror_t openserial_printEvent_schedule(uint8_t event,
 
     return E_SUCCESS;
 }
+
+owerror_t openserial_printEvent_rpl(uint8_t event, open_addr_t *addr1, open_addr_t *addr2) {
+    uint8_t i;
+    stat_rpl_t stat;
+    uint8_t asn[5];
+    ieee154e_getAsn(asn);
+
+    memcpy(&(stat.moteid[0]), &(idmanager_getMyID(ADDR_64B)->addr_64b[0]), sizeof(idmanager_getMyID(ADDR_64B)->addr_64b));
+    stat.event          = event;
+ 
+    if (addr1 != NULL)
+        memcpy(&(stat.addr1[0]), &(addr1->addr_64b[0]), sizeof(stat.addr1));
+    else
+        bzero(&(stat.addr1[0]), sizeof(stat.addr1));
+    if (addr2 != NULL)
+        memcpy(&(stat.addr2[0]), &(addr2->addr_64b[0]), sizeof(stat.addr2));
+    else
+        bzero(&(stat.addr2[0]), sizeof(stat.addr2));
+
+    outputHdlcOpen();
+    outputHdlcWrite(SERFRAME_MOTE2PC_EVENT);
+    outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[0]);
+    outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[1]);
+    outputHdlcWrite(asn[0]);
+    outputHdlcWrite(asn[1]);
+    outputHdlcWrite(asn[2]);
+    outputHdlcWrite(asn[3]);
+    outputHdlcWrite(asn[4]);
+    outputHdlcWrite(EVENT_RPL);
+    for (i = 0; i < sizeof(stat); i++) {
+        outputHdlcWrite(((uint8_t*)&stat)[i]);
+    }
+    outputHdlcClose();
+
+    // start TX'ing
+    openserial_flush();
+
+    return E_SUCCESS;
+}
+
+
 
 owerror_t openserial_printStatus(uint8_t statusElement, uint8_t *buffer, uint8_t length) {
     uint8_t i;

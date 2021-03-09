@@ -527,6 +527,11 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
     if (foundBetterParent) {
         icmpv6rpl_vars.haveParent = TRUE;
         if (!prevHadParent) {
+            //event notification
+            open_addr_t addr_new;
+            neighbors_getNeighborEui64(&addr_new, ADDR_64B, icmpv6rpl_vars.ParentIndex);
+            openserial_printEvent_rpl(EVENT_RPL_PARENT_CHANGE, NULL, &addr_new);
+            
             // in case preParent is killed before calling this function, clear the preferredParent flag
             neighbors_setPreferredParent(prevParentIndex, FALSE);
             // set neighbors as preferred parent
@@ -545,6 +550,12 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
                     // same parent, same rank, nothing to report about
                 }
             } else {
+                //event notification
+                open_addr_t addr_old, addr_new;
+                neighbors_getNeighborEui64(&addr_old, ADDR_64B, prevParentIndex);
+                neighbors_getNeighborEui64(&addr_new, ADDR_64B, icmpv6rpl_vars.ParentIndex);
+                openserial_printEvent_rpl(EVENT_RPL_PARENT_CHANGE, &addr_old, &addr_new);
+                
                 // clear neighbors preferredParent flag
                 neighbors_setPreferredParent(prevParentIndex, FALSE);
                 // set neighbors as preferred parent
@@ -623,6 +634,15 @@ void icmpv6rpl_updateMyDAGrankAndParentSelection(void) {
        //the second parent has changed
        if (!icmpv6rpl_vars.haveSecondParent || prevSecondParentIndex != icmpv6rpl_vars.SecondParentIndex){
            
+           //event notification
+           open_addr_t addr_old, addr_new;
+           neighbors_getNeighborEui64(&addr_old, ADDR_64B, prevSecondParentIndex);
+           neighbors_getNeighborEui64(&addr_new, ADDR_64B, icmpv6rpl_vars.SecondParentIndex);
+           if (icmpv6rpl_vars.haveSecondParent)
+               openserial_printEvent_rpl(EVENT_RPL_SECONDPARENT_CHANGE, &addr_old, &addr_new);
+           else
+               openserial_printEvent_rpl(EVENT_RPL_SECONDPARENT_CHANGE, NULL, &addr_new);
+               
           //remove the old one (if it existed)
           if (icmpv6rpl_vars.haveSecondParent)
              neighbors_setSecondPreferredParent(prevSecondParentIndex, FALSE);
