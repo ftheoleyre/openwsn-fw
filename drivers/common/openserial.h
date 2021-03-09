@@ -48,7 +48,7 @@
 #define SERFRAME_MOTE2PC_CRITICAL                ((uint8_t)'C')
 #define SERFRAME_MOTE2PC_SNIFFED_PACKET          ((uint8_t)'P')
 #define SERFRAME_MOTE2PC_PRINTF                  ((uint8_t)'F')
-#define SERFRAME_MOTE2PC_STAT                    ((uint8_t)'K')
+#define SERFRAME_MOTE2PC_EVENT                   ((uint8_t)'T')
 
 // frames sent PC->mote
 #define SERFRAME_PC2MOTE_SETROOT                 ((uint8_t)'R')
@@ -109,13 +109,16 @@ enum {
 };
 
 enum{
-   STAT_PK = 1,
+    EVENT_PKT = 1,
+    EVENT_SCHEDULE = 2,
 };
 
+// packet transmission / reception
 typedef struct {
+    uint8_t  event;
+    uint8_t  moteid[8];
     uint8_t  l2_src[8];
     uint8_t  l2_dest[8];
-    uint8_t  mode;
     uint8_t  validRx;
     uint8_t  type;
     uint8_t  slotOffset;
@@ -125,11 +128,11 @@ typedef struct {
     uint8_t  lqi;
     uint8_t  rssi;
     uint8_t  crc;
-} stat_pk_t;
+} stat_pkt_t;
 
 enum {
-   MODE_RX = 1,
-   MODE_TX = 2,
+    EVENT_PKT_RX = 1,
+    EVENT_PKT_TX = 2,
 };
 
 enum {
@@ -138,6 +141,26 @@ enum {
     PKTYPE_EB = 3,
     PKTYPE_RPL = 4,
 };
+
+// Schedule modifications
+typedef struct {
+    uint8_t  moteid[8];
+    uint8_t  event;
+    uint8_t  neighbor[8];
+    uint8_t  neighbor2[8];
+    uint8_t  type;
+    uint8_t  shared;
+    uint8_t  anycast;
+    uint8_t  priority;
+    uint8_t  slotOffset;
+    uint8_t  channelOffset;
+} stat_schedule_t;
+
+enum {
+   EVENT_SCHEDULE_ADD = 1,
+   EVENT_SCHEDULE_DEL = 2,
+};
+
 
 //=========================== variables =======================================
 
@@ -168,17 +191,21 @@ typedef struct {
 // admin
 void openserial_init(void);
 
-// transmitting
 
 //each type of statistic
-owerror_t openserial_printStat_pk(
-                                  open_addr_t *src, open_addr_t *dest,
-                                  uint8_t mode, uint8_t validRx, uint8_t type, 
-                                  uint8_t slotOffset, uint8_t channelOffset, uint8_t priority,
-                                  uint8_t nb_retx,
-                                  uint8_t lqi, uint8_t rssi, uint8_t crc
-                                  );
+owerror_t openserial_printEvent_pkt(
+                                    uint8_t event,
+                                    open_addr_t *src, open_addr_t *dest,
+                                    uint8_t validRx, uint8_t type,
+                                    uint8_t slotOffset, uint8_t channelOffset,
+                                    uint8_t priority, uint8_t nb_retx,
+                                    uint8_t lqi, uint8_t rssi, uint8_t crc
+                                    );
 
+owerror_t openserial_printEvent_schedule(uint8_t event,
+                                        open_addr_t *neighbor, open_addr_t *neighbor2,
+                                        uint8_t type, uint8_t shared, uint8_t anycast, uint8_t priority,
+                                        uint8_t slotOffset, uint8_t channelOffset);
 
 owerror_t openserial_printStatus(
         uint8_t statusElement,

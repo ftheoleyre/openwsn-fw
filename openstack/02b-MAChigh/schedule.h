@@ -120,8 +120,6 @@ typedef enum {
     CELLTYPE_TX = 1,
     CELLTYPE_RX = 2,
     CELLTYPE_TXRX = 3,
-//    CELLTYPE_TX_ANYCAST = 4,
-//    CELLTYPE_RX_ANYCAST = 5
 } cellType_t;
 
 typedef struct {

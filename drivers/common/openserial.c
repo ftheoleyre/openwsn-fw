@@ -116,29 +116,35 @@ void openserial_init(void) {
 
 //===== transmitting
 
-
-
-owerror_t openserial_printStat_pk(open_addr_t *src, open_addr_t *dest, uint8_t mode, uint8_t validRx, uint8_t type, uint8_t slotOffset, uint8_t channelOffset, uint8_t priority, uint8_t nb_retx, uint8_t lqi, uint8_t rssi, uint8_t crc) {
+owerror_t openserial_printEvent_pkt(
+                                    uint8_t event,
+                                    open_addr_t *src, open_addr_t *dest,
+                                    uint8_t validRx, uint8_t type,
+                                    uint8_t slotOffset, uint8_t channelOffset,
+                                    uint8_t priority, uint8_t nb_retx,
+                                    uint8_t lqi, uint8_t rssi, uint8_t crc
+                                    ){
     uint8_t i;
-    stat_pk_t stat;
+    stat_pkt_t stat;
     uint8_t asn[5];
     ieee154e_getAsn(asn);
 
+    memcpy(&(stat.moteid[0]), &(idmanager_getMyID(ADDR_64B)->addr_64b[0]), sizeof(idmanager_getMyID(ADDR_64B)->addr_64b));
+    stat.event          = event;
     memcpy(&(stat.l2_src[0]), &(src->addr_64b[0]), sizeof(src->addr_64b));
     memcpy(&(stat.l2_dest[0]), &(dest->addr_64b[0]), sizeof(dest->addr_64b));
-    stat.mode           = mode;
+    stat.validRx        = validRx;
     stat.type           = type;
     stat.slotOffset     = slotOffset;
     stat.channelOffset  = channelOffset;
     stat.priority       = priority;
     stat.nb_retx        = nb_retx;
-    stat.validRx        = validRx;
     stat.lqi            = lqi;
     stat.rssi           = rssi;
     stat.crc            = crc;    
 
     outputHdlcOpen();
-    outputHdlcWrite(SERFRAME_MOTE2PC_STAT);
+    outputHdlcWrite(SERFRAME_MOTE2PC_EVENT);
     outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[0]);
     outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[1]);
     outputHdlcWrite(asn[0]);
@@ -146,8 +152,8 @@ owerror_t openserial_printStat_pk(open_addr_t *src, open_addr_t *dest, uint8_t m
     outputHdlcWrite(asn[2]);
     outputHdlcWrite(asn[3]);
     outputHdlcWrite(asn[4]);
-    outputHdlcWrite(STAT_PK);
-    for (i = 0; i < sizeof(stat_pk_t); i++) {
+    outputHdlcWrite(EVENT_PKT);
+    for (i = 0; i < sizeof(stat_pkt_t); i++) {
         outputHdlcWrite(((uint8_t*)&stat)[i]);
     }
     outputHdlcClose();
@@ -158,8 +164,52 @@ owerror_t openserial_printStat_pk(open_addr_t *src, open_addr_t *dest, uint8_t m
     return E_SUCCESS;
 }
 
+owerror_t openserial_printEvent_schedule(uint8_t event,
+                                        open_addr_t *neighbor, open_addr_t *neighbor2,
+                                        uint8_t type, uint8_t shared, uint8_t anycast, uint8_t priority,
+                                        uint8_t slotOffset, uint8_t channelOffset) {    
+    uint8_t i;
+    stat_schedule_t stat;
+    uint8_t asn[5];
+    ieee154e_getAsn(asn);
 
+    memcpy(&(stat.moteid[0]), &(idmanager_getMyID(ADDR_64B)->addr_64b[0]), sizeof(idmanager_getMyID(ADDR_64B)->addr_64b));
+    if (neighbor != NULL)
+        memcpy(&(stat.neighbor[0]), &(neighbor->addr_64b[0]), sizeof(stat.neighbor));
+    else
+        bzero(&(stat.neighbor[0]), sizeof(stat.neighbor));
+    if (neighbor2 != NULL)
+        memcpy(&(stat.neighbor2[0]), &(neighbor2->addr_64b[0]), sizeof(stat.neighbor2));
+    else
+        bzero(&(stat.neighbor2[0]), sizeof(stat.neighbor2));
+    stat.event          = event;
+    stat.type           = type;
+    stat.shared         = shared;
+    stat.anycast        = anycast;
+    stat.priority       = priority;
+    stat.slotOffset     = slotOffset;
+    stat.channelOffset  = channelOffset;
 
+    outputHdlcOpen();
+    outputHdlcWrite(SERFRAME_MOTE2PC_EVENT);
+    outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[0]);
+    outputHdlcWrite(idmanager_getMyID(ADDR_16B)->addr_16b[1]);
+    outputHdlcWrite(asn[0]);
+    outputHdlcWrite(asn[1]);
+    outputHdlcWrite(asn[2]);
+    outputHdlcWrite(asn[3]);
+    outputHdlcWrite(asn[4]);
+    outputHdlcWrite(EVENT_SCHEDULE);
+    for (i = 0; i < sizeof(stat_schedule_t); i++) {
+        outputHdlcWrite(((uint8_t*)&stat)[i]);
+    }
+    outputHdlcClose();
+
+    // start TX'ing
+    openserial_flush();
+
+    return E_SUCCESS;
+}
 
 owerror_t openserial_printStatus(uint8_t statusElement, uint8_t *buffer, uint8_t length) {
     uint8_t i;

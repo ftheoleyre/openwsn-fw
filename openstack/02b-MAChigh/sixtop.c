@@ -1016,7 +1016,7 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
                             msg->l2_sixtop_celllist_add,
                             &(msg->l2_nextORpreviousHop),
                             &(sixtop_vars.neigbor_secondReceiver),
-                            msg->l2_sixtop_cellOptions
+                            msg->l2_sixtop_cellOptions & ~CELLOPTIONS_PRIORITY   //we don't care about the priority flag in TX mode -> zero
                    );
                   
                    // we are already idle if we received an unicast sixtop request
@@ -2055,11 +2055,8 @@ bool sixtop_addCells(
         openserial_printf("CELLTYPE_TX_ANYCAST PRIO=%d\n", priority);
     }
     else if (cellOptions == (CELLOPTIONS_TX | CELLOPTIONS_ANYCAST | CELLOPTIONS_PRIORITY)){
-        type = CELLTYPE_TX;
-        isShared = FALSE;
-        isAnycast = TRUE;
-        priority = 1;
-        openserial_printf("CELLTYPE_TX_ANYCAST PRIO=%d\n", priority);
+        openserial_printf("BUG no PRIORITY in TX MODE\n");
+        return FALSE;
     }
     else if (cellOptions == (CELLOPTIONS_RX | CELLOPTIONS_ANYCAST)){
         type = CELLTYPE_RX;

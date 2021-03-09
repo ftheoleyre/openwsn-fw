@@ -263,12 +263,20 @@ owerror_t schedule_addActiveSlot(
     backupEntry_t *backupEntry;
    
     LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_ADD, (errorparameter_t) slotOffset, (errorparameter_t) anycast);
-
+    
     uint8_t i;
     bool entry_found;
     bool inBackupEntries;
 
     bool needSwapEntries;
+    
+    //event notification through openserial
+    openserial_printEvent_schedule(
+                                  EVENT_SCHEDULE_ADD,
+                                  neighbor, neighbor2,
+                                  type, shared, anycast, priority,
+                                  slotOffset, channelOffset
+                                  );
 
     INTERRUPT_DECLARATION();
     DISABLE_INTERRUPTS();
@@ -489,7 +497,15 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
     
     LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_DEL, (errorparameter_t) slotOffset, (errorparameter_t) type);
 
-   
+    //event notification through openserial
+    openserial_printEvent_schedule(
+                                  EVENT_SCHEDULE_DEL,
+                                  neighbor, NULL,
+                                  type, isShared, -1, -1,
+                                  slotOffset, -1
+                                  );
+
+
     INTERRUPT_DECLARATION();
     DISABLE_INTERRUPTS();
 
@@ -531,7 +547,7 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
     }
 
     if (isbackupEntry) {
-       
+        
         // reset the backup entry
         backupEntry->type = CELLTYPE_OFF;
         backupEntry->shared = FALSE;
