@@ -262,7 +262,7 @@ owerror_t schedule_addActiveSlot(
 
     backupEntry_t *backupEntry;
    
-    LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_ADD, (errorparameter_t) slotOffset, (errorparameter_t) anycast);
+//    LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_ADD, (errorparameter_t) slotOffset, (errorparameter_t) anycast);
     
     uint8_t i;
     bool entry_found;
@@ -495,7 +495,7 @@ owerror_t schedule_removeActiveSlot(slotOffset_t slotOffset, cellType_t type, bo
     scheduleEntry_t *slotContainer;
     scheduleEntry_t *previousSlotWalker;
     
-    LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_DEL, (errorparameter_t) slotOffset, (errorparameter_t) type);
+ //   LOG_SUCCESS(COMPONENT_SCHEDULE, ERR_SCHEDULE_DEL, (errorparameter_t) slotOffset, (errorparameter_t) type);
 
     //event notification through openserial
     openserial_printEvent_schedule(

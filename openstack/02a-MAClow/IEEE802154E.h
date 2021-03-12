@@ -290,7 +290,7 @@ typedef struct {
     PORT_TIMER_WIDTH radioOnInit;                   // when within the slot the radio turns on
     PORT_TIMER_WIDTH radioOnTics;                   // how many tics within the slot the radio is on
     bool radioOnThisSlot;                           // to control if the radio has been turned on in a slot.
-
+    bool radioStartOfFrameOnGoing;                  // a startOfFrame has been triggered, endOfFrame not yet
     // control
     bool isAckEnabled;                              // whether reply for ack, used for synchronization test
     bool isSecurityEnabled;                         // whether security is applied

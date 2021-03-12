@@ -936,6 +936,8 @@ void timer_sixtop_six2six_timeout_fired(void) {
 void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
     msg->owner = COMPONENT_SIXTOP_RES;
      
+    LOG_SUCCESS(COMPONENT_SIXTOP_RES, ERR_GENERIC,0,0);
+    
     openserial_printf("sixtop packet sendDone to %x:%x, type %d\n",
                       msg->l2_nextORpreviousHop.addr_64b[6],
                       msg->l2_nextORpreviousHop.addr_64b[7],
@@ -1011,13 +1013,25 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t *msg, owerror_t error) {
             // in case a response is sent out, check the return code
             if (msg->l2_sixtop_returnCode == IANA_6TOP_RC_SUCCESS) {
                if (msg->l2_sixtop_command == IANA_6TOP_CMD_ADD) {
-                   sixtop_addCells(
-                            msg->l2_sixtop_frameID,
-                            msg->l2_sixtop_celllist_add,
-                            &(msg->l2_nextORpreviousHop),
-                            &(sixtop_vars.neigbor_secondReceiver),
-                            msg->l2_sixtop_cellOptions & ~CELLOPTIONS_PRIORITY   //we don't care about the priority flag in TX mode -> zero
-                   );
+                   
+                   //RX mode -> extract the priority flag
+                   if ((msg->l2_sixtop_cellOptions & CELLOPTIONS_RX) != 0)
+                       sixtop_addCells(
+                                       msg->l2_sixtop_frameID,
+                                       msg->l2_sixtop_celllist_add,
+                                       &(msg->l2_nextORpreviousHop),
+                                       &(sixtop_vars.neigbor_secondReceiver),
+                                       msg->l2_sixtop_cellOptions
+                                       );
+                   //TX MODE -> discard the priority flag
+                   else
+                       sixtop_addCells(
+                                       msg->l2_sixtop_frameID,
+                                       msg->l2_sixtop_celllist_add,
+                                       &(msg->l2_nextORpreviousHop),
+                                       &(sixtop_vars.neigbor_secondReceiver),
+                                       msg->l2_sixtop_cellOptions & ~CELLOPTIONS_PRIORITY
+                                       );
                   
                    // we are already idle if we received an unicast sixtop request
                    if (sixtop_vars.six2six_state != SIX_STATE_IDLE)
@@ -1176,6 +1190,8 @@ void sixtop_six2six_notifyReceive(
     cellInfo_ht celllist_list[CELLLIST_MAX_LEN];
     uint8_t response_type = IANA_6TOP_TYPE_RESPONSE;  //by default, we respond with a response
 
+    LOG_SUCCESS(COMPONENT_SIXTOP_RES, ERR_GENERIC,2,2);
+    
     openserial_printf("sixtop packet received from %x:%x, type %d, we are in state %d\n",
                       pkt->l2_nextORpreviousHop.addr_64b[6],
                       pkt->l2_nextORpreviousHop.addr_64b[7],

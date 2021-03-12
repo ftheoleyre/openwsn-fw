@@ -206,6 +206,7 @@ void ieee154e_init(void) {
 
     // switch radio on
     radio_rfOn();
+    ieee154e_vars.radioStartOfFrameOnGoing = FALSE;
 
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
     sctimer_set_actionCallback(isr_ieee154e_timer);
@@ -479,6 +480,8 @@ This function executes in ISR mode.
 */
 void ieee154e_startOfFrame(PORT_TIMER_WIDTH capturedTime) {
     PORT_TIMER_WIDTH referenceTime = capturedTime - ieee154e_vars.startOfSlotReference;
+    ieee154e_vars.radioStartOfFrameOnGoing = TRUE;
+
     if (ieee154e_vars.isSync == FALSE) {
         activity_synchronize_startOfFrame(referenceTime);
     } else {
@@ -505,18 +508,18 @@ void ieee154e_startOfFrame(PORT_TIMER_WIDTH capturedTime) {
             case S_TXACKDELAY:
                 activity_ri8(referenceTime);
                 break;
-            case S_TXACKOFFSET:
-              openserial_printf("State error S_TXACKOFFSET\n");
-            break;
               
            // CCA to trigger/triggered: the end of the rx will be handled as a CCA_RXING later
            case S_CCATRIGGER:
            case S_CCATRIGGERED:
             
               // free the received data: the primary receiver is curently acknowledging it
-              openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
-              ieee154e_vars.dataReceived = NULL;
-            
+              // CCAend may have already been called meanwhile, and the packet may have been already dropped
+              if (ieee154e_vars.dataReceived != NULL){
+                  openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
+                  ieee154e_vars.dataReceived = NULL;
+              }
+                
               //cancel the current end of cca interrupt (rather wait for the end of rx)
               opentimers_scheduleAbsolute(
                       ieee154e_vars.timerId,                            // timerId
@@ -525,9 +528,7 @@ void ieee154e_startOfFrame(PORT_TIMER_WIDTH capturedTime) {
                       TIME_TICS,                                        // timetype
                       isr_ieee154e_newSlot                              // callback
               );
-              
-              openserial_printf("start of frame while in CCA -> ack of the primary receiver\n");
-              
+                            
               break;
             default:
                 // log the error
@@ -551,6 +552,8 @@ This function executes in ISR mode.
 */
 void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime) {
     PORT_TIMER_WIDTH referenceTime = capturedTime - ieee154e_vars.startOfSlotReference;
+    ieee154e_vars.radioStartOfFrameOnGoing = FALSE;
+    
     if (ieee154e_vars.isSync == FALSE) {
         activity_synchronize_endOfFrame(referenceTime);
     } else {
@@ -593,33 +596,35 @@ void ieee154e_endOfFrame(PORT_TIMER_WIDTH capturedTime) {
 This function executes in ISR mode.
 */
 void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
-   ieee154e_vars.CCAResult = code;
-   
-   if (ieee154e_vars.isSync == FALSE) {
+    ieee154e_vars.CCAResult = code;
+
+/*
+    openserial_printf("----------------------------------");
+    openserial_printf("CCA code %d, state %d, isSynced=%d", code, ieee154e_vars.state, ieee154e_vars.isSync);
+    openserial_printf("----------------------------------");
+*/
+    
+    if (ieee154e_vars.isSync == FALSE) {
        activity_synchronize_endOfFrame(code);
        return;
     }
-   openserial_printf("-----------------------");
-   openserial_printf("CCA code %d, state %d", code, ieee154e_vars.state);
-   openserial_printf("-----------------------");
-
-   
    
     switch (ieee154e_vars.state) {
            
        //updates the result of the last CCA
        case S_CCATRIGGERED:
 
-          // we captured the ack of the primary receiver
-          if (ieee154e_vars.CCAResult == CCA_RXING){
+          // we have an on-going reception (startofFrame already triggered and not treated or radio notification)
+          if ((ieee154e_vars.radioStartOfFrameOnGoing == TRUE) || (ieee154e_vars.CCAResult == CCA_RXING)){
              LOG_INFO(COMPONENT_IEEE802154E, ERR_PRIMARY_ANYCAST,
                       (errorparameter_t) FALSE,
                       (errorparameter_t) ieee154e_vars.CCAResult);
              
              // free the received data, the primary receiver acknowledged it
-             openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
-             ieee154e_vars.dataReceived = NULL;
-           
+             if (ieee154e_vars.dataReceived != NULL){
+                openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
+                ieee154e_vars.dataReceived = NULL;
+             }
              //cancel the current end of cca interrupt
              opentimers_scheduleAbsolute(
                      ieee154e_vars.timerId,                            // timerId
@@ -629,8 +634,6 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
                      isr_ieee154e_newSlot                              // callback
              );
              
-             openserial_printf("the actual end of slot will be triggered by the end of the reception (=ack)\n");
-             
              return;
           }
           // the primary receiver acknowledged the packet (CCA != IDLE)
@@ -638,13 +641,15 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
              LOG_INFO(COMPONENT_IEEE802154E, ERR_PRIMARY_ANYCAST,
                       (errorparameter_t) FALSE,
                       (errorparameter_t) ieee154e_vars.CCAResult);
-             
+              
              // free the received data, the primary receiver acknowledged it
-             openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
-
-             // clear local variable
-             ieee154e_vars.dataReceived = NULL;
-               
+             // the packet may have already been dropped if a start of frame was meanwhile triggered
+             // (between CCA start and CCA end)
+             if(ieee154e_vars.dataReceived != NULL){
+                openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
+                ieee154e_vars.dataReceived = NULL;
+             }
+            
              //abort the tx
              endSlot();
 
@@ -654,13 +659,6 @@ void ieee154e_CCAEnd(PORT_TIMER_WIDTH code) {
           LOG_ERROR(COMPONENT_IEEE802154E, ERR_PRIMARY_ANYCAST,
                       (errorparameter_t) TRUE,
                       (errorparameter_t) ieee154e_vars.CCAResult);
-           
-          
-          openserial_printf("DURATION_rt6 %d", DURATION_rt6);
-          openserial_printf("DURATION_rtcca %d", DURATION_rtcca);
-          openserial_printf("timeoutt CCA %d", DURATION_rtcca + CCAduration);
-
-          
           
           //ready to tx the ack
           changeState(S_TXACKREADY);
@@ -887,7 +885,7 @@ port_INLINE void activity_synchronize_endOfFrame(PORT_TIMER_WIDTH capturedTime) 
 
     // change state
     changeState(S_SYNCPROC);
-
+    
     // get a buffer to put the (received) frame in
     ieee154e_vars.dataReceived = openqueue_getFreePacketBuffer(COMPONENT_IEEE802154E);
     if (ieee154e_vars.dataReceived == NULL) {
@@ -1776,7 +1774,6 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
         // in any case, execute the clean-up code below (processing of ACK done)
     } while (0);
 
-    
     openserial_printEvent_pkt(
                               EVENT_PKT_RX,
                               &(ieee154e_vars.ackReceived->l2_nextORpreviousHop),
@@ -1787,9 +1784,8 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
                               schedule_getChannelOffset(),
                               schedule_getPriority(),
                               ieee154e_vars.ackReceived->l2_numTxAttempts,
-                              1,1,1                        // empty rssi, lsi, crc for TX
+                              1,2,4                        // empty rssi, lsi, crc for TX
                               );
-  
     
     // free the received ack so corresponding RAM memory can be recycled
     openqueue_freePacketBuffer(ieee154e_vars.ackReceived);
@@ -1939,7 +1935,6 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
 #endif
 
 
-   
     // get a buffer to put the (received) data in
     ieee154e_vars.dataReceived = openqueue_getFreePacketBuffer(COMPONENT_IEEE802154E);
     if (ieee154e_vars.dataReceived == NULL) {
@@ -2352,7 +2347,7 @@ port_INLINE void activity_ricca(void) {
            TIME_TICS,                                        // timetype
            isr_ieee154e_timer                                // callback
    );
-
+    
    //ask for the radio to make a CCA (callback later for the result)
    //be careful: the callback may be called immediately if the radio is currently receiving something
    //thus, radio_trigger_CCA() = last thing to be called in this function
@@ -2362,13 +2357,15 @@ port_INLINE void activity_ricca(void) {
 
 //timeout of the CCA trigger
 port_INLINE void activity_ricca_e(void) {
-   openserial_printf("Timeout for the CCA: we didn't receive the status");
-   
-   // free the (invalid) received data so RAM memory can be recycled
-   openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
-
-   // clear local variable
-   ieee154e_vars.dataReceived = NULL;
+   openserial_printf("CCA timeout");
+    
+   // free the received data so RAM memory can be recycled
+   if (ieee154e_vars.dataReceived != NULL){
+       openqueue_freePacketBuffer(ieee154e_vars.dataReceived);
+       ieee154e_vars.dataReceived = NULL;
+   }
+   else
+       openserial_printf("activity_ricca_e: ieee154e_vars.dataReceived was already dropped while we were in CCA mode");
 
    // abort
    endSlot();
@@ -2412,10 +2409,6 @@ port_INLINE void activity_rie5(void) {
 }
 
 port_INLINE void activity_ri8(PORT_TIMER_WIDTH capturedTime) {
-   if (schedule_getPriority() > 0){
-      openserial_printf("ri8 - S_TXACK ");
-   }
-   
     // change state
     changeState(S_TXACK);
 #ifdef SLOT_FSM_IMPLEMENTATION_MULTIPLE_TIMER_INTERRUPT
@@ -2480,11 +2473,6 @@ port_INLINE void activity_ri9(PORT_TIMER_WIDTH capturedTime) {
     // free the ack we just sent so corresponding RAM memory can be recycled
     openqueue_freePacketBuffer(ieee154e_vars.ackToSend);
 
-    if (schedule_getPriority() > 0){
-        openserial_printf("ri9 - ack finished ");
-    }
-    
-    
     //stats
     openserial_printEvent_pkt(
                             EVENT_PKT_TX,
@@ -3103,13 +3091,13 @@ Besides simply updating the state global variable, this function toggles the FSM
 \param[in] newstate The state the IEEE802.15.4e FSM is now in.
 */
 void changeState(ieee154e_state_t newstate) {
-/*    if (newstate != ieee154e_vars.state)
+   /* if (newstate != ieee154e_vars.state)
        LOG_SUCCESS(COMPONENT_IEEE802154E,
                 ERR_IEEE154_CHANGESTATE,
                 ieee154e_vars.state,
                 newstate);
-  */
-   
+    */
+    
     // update the state
     ieee154e_vars.state = newstate;
     // wiggle the FSM debug pin

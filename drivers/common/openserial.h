@@ -116,8 +116,8 @@ enum{
 
 // packet transmission / reception
 typedef struct {
-    uint8_t  event;
     uint8_t  moteid[8];
+    uint8_t  event;
     uint8_t  l2_src[8];
     uint8_t  l2_dest[8];
     uint8_t  validRx;
