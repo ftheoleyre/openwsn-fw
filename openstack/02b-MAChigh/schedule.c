@@ -1129,6 +1129,21 @@ void schedule_getNeighbor(open_addr_t *addrToWrite) {
 }
 
 /**
+\brief Get the neighbor2 associated wit the current schedule entry.
+
+\returns The neighbor2 associated wit the current schedule entry.
+*/
+void schedule_getNeighbor2(open_addr_t *addrToWrite) {
+
+    INTERRUPT_DECLARATION();
+    DISABLE_INTERRUPTS();
+
+    memcpy(addrToWrite, &(schedule_vars.currentScheduleEntry->neighbor2), sizeof(open_addr_t));
+
+    ENABLE_INTERRUPTS();
+}
+
+/**
 \brief Get the slot offset of the current schedule entry.
 
 \returns The slot offset of the current schedule entry.
@@ -1164,6 +1179,7 @@ channelOffset_t schedule_getChannelOffset(void) {
     return returnVal;
 }
 
+
 /**
 \brief Get the priority of the current schedule entry.
 
@@ -1181,6 +1197,7 @@ uint8_t schedule_getPriority(void) {
 
     return returnVal;
 }
+
 
 
 /**

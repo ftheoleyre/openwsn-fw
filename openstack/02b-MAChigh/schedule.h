@@ -289,6 +289,8 @@ bool schedule_getIsAutoCell(void);
 
 void schedule_getNeighbor(open_addr_t *addrToWrite);
 
+void schedule_getNeighbor2(open_addr_t *addrToWrite);
+
 slotOffset_t schedule_getSlottOffset(void);
 
 channelOffset_t schedule_getChannelOffset(void);

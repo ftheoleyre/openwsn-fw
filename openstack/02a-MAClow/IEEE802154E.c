@@ -1784,7 +1784,7 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
                               schedule_getChannelOffset(),
                               schedule_getPriority(),
                               ieee154e_vars.ackReceived->l2_numTxAttempts,
-                              1,2,4                        // empty rssi, lsi, crc for TX
+                              1,1,1                        // empty rssi, lsi, crc for TX
                               );
     
     // free the received ack so corresponding RAM memory can be recycled
@@ -2005,7 +2005,7 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
                                   schedule_getSlottOffset(),
                                   schedule_getChannelOffset(),
                                   schedule_getPriority(),
-                                  0,              //nb of retries
+                                  1,              //numtxattempts
                                   ieee154e_vars.dataReceived->l1_rssi,
                                   ieee154e_vars.dataReceived->l1_lqi,
                                   ieee154e_vars.dataReceived->l1_crc
@@ -2483,7 +2483,7 @@ port_INLINE void activity_ri9(PORT_TIMER_WIDTH capturedTime) {
                             schedule_getSlottOffset(),
                             schedule_getChannelOffset(),
                             schedule_getPriority(),
-                            0,                           //nb of retx
+                            1,                           //nb of retx
                             1,1,1                        // empty rssi, lsi, crc for TX
                             );                            
 
@@ -2555,11 +2555,18 @@ A packet is a valid ACK if it satisfies the following conditions:
 \returns TRUE if packet is a valid ACK, FALSE otherwise.
 */
 port_INLINE bool isValidAck(ieee802154_header_iht* ieee802514_header, OpenQueueEntry_t* packetSent) {
+    open_addr_t neigh2;
+    schedule_getNeighbor2(&neigh2);
+    
     return ieee802514_header->valid == TRUE && \
         ieee802514_header->frameType == IEEE154_TYPE_ACK && \
         packetfunctions_sameAddress(&ieee802514_header->panid, idmanager_getMyID(ADDR_PANID)) && \
         idmanager_isMyAddress(&ieee802514_header->dest) && \
-        packetfunctions_sameAddress(&ieee802514_header->src, &packetSent->l2_nextORpreviousHop);
+        (
+         packetfunctions_sameAddress(&ieee802514_header->src, &packetSent->l2_nextORpreviousHop)
+                                     ||
+         packetfunctions_sameAddress(&ieee802514_header->src, &neigh2)
+        );
 }
 
 //======= ASN handling
